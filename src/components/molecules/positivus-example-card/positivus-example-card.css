@@ -1,0 +1,13 @@
+:host {
+  display: block;
+}
+
+.card {
+  padding: 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.card__title {
+  margin-bottom: 0.5rem;
+}
