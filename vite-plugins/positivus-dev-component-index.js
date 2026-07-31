@@ -41,7 +41,7 @@ function renderIndexHtml(components, base) {
     .map(
       (group) => `
       <section>
-        <h2>${group.level}</h2>
+        <h2 class="title-h4">${group.level}</h2>
         <ul>
           ${group.items
             .map(
@@ -59,12 +59,21 @@ function renderIndexHtml(components, base) {
   <head>
     <meta charset="UTF-8" />
     <title>Componentes — Positivus (dev)</title>
+    <link rel="stylesheet" href="${base}src/styles/reset.css" />
+    <link rel="stylesheet" href="${base}src/styles/global.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="${base}src/styles/typograph.css" />
     <style>
-      body { font-family: system-ui, sans-serif; margin: 2rem; color: #1a1a1a; }
+      body { margin: 2rem; color: #1a1a1a; }
       h1 { margin-bottom: 0.25rem; }
       p { color: #555; }
       section { margin-top: 1.5rem; }
-      h2 { text-transform: capitalize; font-size: 1.1rem; }
+      h2 { text-transform: capitalize; }
       ul { list-style: none; padding: 0; }
       li { margin: 0.35rem 0; }
       a { text-decoration: none; color: #0b5fff; font-size: 1rem; }
@@ -72,8 +81,8 @@ function renderIndexHtml(components, base) {
     </style>
   </head>
   <body>
-    <h1>Componentes</h1>
-    <p>Página só de desenvolvimento. Clique em um componente para ver o preview do HTML/CSS dele.</p>
+    <h1 class="title-h1">Componentes</h1>
+    <p class="paragraph">Página só de desenvolvimento. Clique em um componente para ver o preview do HTML/CSS dele.</p>
     ${sectionsHtml || '<p>Nenhum componente encontrado ainda.</p>'}
   </body>
 </html>
@@ -100,6 +109,13 @@ function renderComponentPreview(projectRoot, base, level, name) {
     <title>Preview: ${name}</title>
     <link rel="stylesheet" href="${base}src/styles/reset.css" />
     <link rel="stylesheet" href="${base}src/styles/global.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="${base}src/styles/typograph.css" />
   </head>
   <body>
     <div id="preview-host"></div>
