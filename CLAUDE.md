@@ -240,3 +240,4 @@ Exemplos: `feat/hero-section`, `fix/nav-overlap`, `chore/eslint-config`, `docs/r
 
 - **Sempre perguntar antes de fazer mudanças estruturais** (criar/mover pastas, novos componentes, alterar convenções) — apresentar o plano e esperar confirmação antes de executar.
 - Não adicionar tooling, dependências ou automações (ex: husky, commitlint, CI) que não tenham sido pedidas explicitamente.
+- Nunca adicionar comentários explicando o porquê de uma mudança — só adicionar comentário se for estritamente necessário por algum outro motivo.
