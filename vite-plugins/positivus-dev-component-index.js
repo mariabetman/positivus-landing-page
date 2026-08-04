@@ -100,7 +100,20 @@ function renderComponentPreview(projectRoot, base, level, name) {
 
   const markup = fs.readFileSync(htmlFile, 'utf-8');
   const cssFile = path.join(componentDir, `${name}.css`);
-  const css = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
+  const ownCss = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
+
+  // Mesma ordem/estilos que o BaseComponent real adota no Shadow DOM
+  // (ver src/components/base-component.js): reset, tipografia e só então
+  // o CSS do próprio componente.
+  const resetCss = fs.readFileSync(
+    path.join(projectRoot, 'node_modules/eric-meyer-reset/eric-meyer-reset.css'),
+    'utf-8',
+  );
+  const typographCss = fs.readFileSync(
+    path.join(projectRoot, 'src/styles/typograph.css'),
+    'utf-8',
+  );
+  const css = `${resetCss}\n${typographCss}\n${ownCss}`;
 
   return `<!doctype html>
 <html lang="pt-BR">
