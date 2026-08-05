@@ -10,7 +10,7 @@ describe('positivus-example-card', () => {
     const el = document.createElement('positivus-example-card');
     document.body.append(el);
 
-    expect(el.shadowRoot.querySelector('.card__title').textContent).toBe('Example Card');
+    expect(el.shadowRoot.querySelector('.card__title').textContent).toBe('Quebrado de propósito');
     expect(el.shadowRoot.querySelector('.card__text').textContent).toBe(
       'Este é um componente de exemplo.',
     );
