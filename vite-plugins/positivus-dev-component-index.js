@@ -2,8 +2,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const COMPONENTS_ROOT = 'src/components';
+const STYLES_ROOT = 'src/styles';
 const LEVELS = ['atoms', 'molecules', 'organisms'];
 const INDEX_ROUTE = '/__components';
+
+/**
+ * Lista os .css de src/styles/ e monta as tags <link> correspondentes, pra
+ * que qualquer arquivo novo nessa pasta apareça nas páginas de dev sem
+ * precisar editar este plugin. Ordem alfabética, que já mantém reset.css
+ * antes de typograph.css (a ordem que importa pra cascata).
+ */
+function renderGlobalStyleLinks(projectRoot, base) {
+  const stylesDir = path.join(projectRoot, STYLES_ROOT);
+  const files = fs
+    .readdirSync(stylesDir)
+    .filter((file) => file.endsWith('.css'))
+    .sort();
+
+  return files
+    .map((file) => `<link rel="stylesheet" href="${base}${STYLES_ROOT}/${file}" />`)
+    .join('\n    ');
+}
 
 /**
  * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes
@@ -31,7 +50,7 @@ function findComponents(projectRoot) {
   return components;
 }
 
-function renderIndexHtml(components, base) {
+function renderIndexHtml(components, base, projectRoot) {
   const groups = LEVELS.map((level) => ({
     level,
     items: components.filter((component) => component.level === level),
@@ -59,15 +78,13 @@ function renderIndexHtml(components, base) {
   <head>
     <meta charset="UTF-8" />
     <title>Componentes — Positivus (dev)</title>
-    <link rel="stylesheet" href="${base}src/styles/reset.css" />
-    <link rel="stylesheet" href="${base}src/styles/global.css" />
+    ${renderGlobalStyleLinks(projectRoot, base)}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="${base}src/styles/typograph.css" />
     <style>
       body { margin: 2rem; color: #1a1a1a; }
       h1 { margin-bottom: 0.25rem; }
@@ -110,7 +127,7 @@ function renderComponentPreview(projectRoot, base, level, name) {
     'utf-8',
   );
   const typographCss = fs.readFileSync(
-    path.join(projectRoot, 'src/styles/typograph.css'),
+    path.join(projectRoot, STYLES_ROOT, 'typograph.css'),
     'utf-8',
   );
   const css = `${resetCss}\n${typographCss}\n${ownCss}`;
@@ -120,15 +137,13 @@ function renderComponentPreview(projectRoot, base, level, name) {
   <head>
     <meta charset="UTF-8" />
     <title>Preview: ${name}</title>
-    <link rel="stylesheet" href="${base}src/styles/reset.css" />
-    <link rel="stylesheet" href="${base}src/styles/global.css" />
+    ${renderGlobalStyleLinks(projectRoot, base)}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="${base}src/styles/typograph.css" />
   </head>
   <body>
     <div id="preview-host"></div>
@@ -180,7 +195,7 @@ export function positivusDevComponentIndex() {
         if (pathname === routeWithBase) {
           const components = findComponents(server.config.root);
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.end(renderIndexHtml(components, base));
+          res.end(renderIndexHtml(components, base, server.config.root));
           return;
         }
 
