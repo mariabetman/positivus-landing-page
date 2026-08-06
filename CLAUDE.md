@@ -101,6 +101,8 @@ Cada componente é isolado em sua própria pasta dentro do nível correto (`atom
 
 Não é preciso criar nenhum arquivo de preview manualmente — rodando `npm run dev`, o preview do HTML/CSS do componente é gerado automaticamente (ver "Preview automático de componentes" abaixo).
 
+Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: um hook de `pre-commit` (`scripts/generate-component-files.js`, ver "Geração automática de arquivos de componente" abaixo) detecta um `.html` novo de componente no commit e gera os 3 arquivos automaticamente, caso ainda não existam, incluindo-os no mesmo commit. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
+
 Regras:
 
 - Nome da tag customizada sempre com hífen e prefixado com `positivus-` (ex: `positivus-example-card`), exigência da spec de Custom Elements + convenção do projeto.
@@ -119,9 +121,22 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Tudo implementado em `vite-plugins/positivus-dev-component-index.js`, um plugin Vite ativo só em modo dev (`apply: 'serve'`) — não roda no `vite build`, não afeta o site publicado nem o `index.html` real.
 - Rotas servidas só em dev:
   - `/__components` → lista os componentes (varre `src/components/<nivel>/positivus-<nome>/` procurando pastas com um `<nome>.html`).
-  - `/__components/<nivel>/<nome>` → preview do componente: lê o `.html`/`.css` do disco e monta um Shadow DOM de verdade via `<script>` (`attachShadow` + `<style>` com o CSS do componente) — a regra `:host { ... }` funciona igual funcionaria no componente real. `reset.css`/`global.css` são carregados globalmente (fora do Shadow DOM), como em qualquer página.
-- Tudo é lido do disco a cada requisição — criar um componente novo ou editar seu `.html`/`.css` já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
+  - `/__components/<nivel>/<nome>` → preview do componente: lê o `.html`/`.css` do disco e monta um Shadow DOM de verdade via `<script>` (`attachShadow` + `<style>` com o CSS do componente) — a regra `:host { ... }` funciona igual funcionaria no componente real.
+- As duas páginas acima carregam, no `<head>` (fora do Shadow DOM), todo `.css` que existir em `src/styles/` — a lista é montada dinamicamente (`fs.readdirSync`), então um arquivo novo nessa pasta (ex: `colors.css`) aparece automaticamente, sem editar o plugin. Já o CSS injetado dentro do Shadow DOM simulado do preview (reset + `typograph.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos.
+- Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
+
+## Geração automática de arquivos de componente
+
+Um hook de `pre-commit` (Husky) roda `scripts/generate-component-files.js` antes de todo commit:
+
+- Verifica os arquivos **adicionados no stage** (`git diff --cached --diff-filter=A`) procurando um `.html` novo dentro de `src/components/<nivel>/positivus-<nome>/`.
+- Pra cada componente novo encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
+- O teste gerado é mínimo (só confirma que a tag foi registrada via `customElements.get`) — não tenta adivinhar o conteúdo real do `.html`, que quem criou o componente pode complementar depois.
+- Os arquivos gerados são incluídos automaticamente no mesmo commit (`git add`).
+- Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
+- Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
+- Pra rodar manualmente sem commitar (ex: pra testar), use `npm run generate:component`.
 
 ## Storybook
 

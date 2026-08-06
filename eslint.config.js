@@ -24,6 +24,15 @@ export default [
     files: ['cypress/**/*.js', 'cypress.config.js'],
   },
   {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  {
     ignores: ['dist/', 'node_modules/', 'cypress/videos/', 'cypress/screenshots/', 'storybook-static/'],
   },
 ];
