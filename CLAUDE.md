@@ -101,7 +101,7 @@ Cada componente é isolado em sua própria pasta dentro do nível correto (`atom
 
 Não é preciso criar nenhum arquivo de preview manualmente — rodando `npm run dev`, o preview do HTML/CSS do componente é gerado automaticamente (ver "Preview automático de componentes" abaixo).
 
-Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: um hook de `pre-commit` (`scripts/generate-component-files.js`, ver "Geração automática de arquivos de componente" abaixo) detecta um `.html` novo de componente no commit e gera os 3 arquivos automaticamente, caso ainda não existam, incluindo-os no mesmo commit. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
+Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: depois de criar o `.html`/`.css`, rode `npm run generate:component` (ver "Geração automática de arquivos de componente" abaixo) pra gerar os 3 arquivos automaticamente, caso ainda não existam. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
 
 Regras:
 
@@ -128,15 +128,14 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 
 ## Geração automática de arquivos de componente
 
-Um hook de `pre-commit` (Husky) roda `scripts/generate-component-files.js` antes de todo commit:
+`npm run generate:component` (roda `scripts/generate-component-files.js`) é um comando manual, não um hook de git — não dispara sozinho em nenhum momento, precisa ser chamado explicitamente. Essa decisão é proposital: um hook de `pre-commit` (via Husky) foi tentado antes, mas depende de cada dev ter o Husky instalado corretamente (o que pode falhar silenciosamente, ex: `npm config get ignore-scripts` como `true` bloqueando o `prepare` do Husky sem aviso nenhum) — um comando manual sempre funciona igual, independente da máquina.
 
-- Verifica os arquivos **adicionados no stage** (`git diff --cached --diff-filter=A`) procurando um `.html` novo dentro de `src/components/<nivel>/positivus-<nome>/`.
-- Pra cada componente novo encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
+- Varre `src/components/<nivel>/positivus-<nome>/` procurando toda pasta que já tenha um `.html` (mesma lógica de `vite-plugins/positivus-dev-component-index.js`).
+- Pra cada componente encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
 - O teste gerado é mínimo (só confirma que a tag foi registrada via `customElements.get`) — não tenta adivinhar o conteúdo real do `.html`, que quem criou o componente pode complementar depois.
-- Os arquivos gerados são incluídos automaticamente no mesmo commit (`git add`).
+- Pra cada componente com algum arquivo gerado, o comando já faz `git add` só desses arquivos novos e cria um commit próprio, seguindo a convenção de commits do projeto: `feat(<nivel>): gera js, storybook e teste de positivus-<nome>`. Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
-- Pra rodar manualmente sem commitar (ex: pra testar), use `npm run generate:component`.
 
 ## Storybook
 
