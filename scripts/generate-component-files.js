@@ -110,11 +110,11 @@ function generateMissingFiles({ level, name }) {
   return createdFiles;
 }
 
-function commitCreatedFiles(createdFiles, { level, name }) {
+function commitCreatedFiles(createdFiles, { name }) {
   if (createdFiles.length === 0) return;
 
   execFileSync('git', ['add', ...createdFiles], { cwd: PROJECT_ROOT });
-  const message = `feat(${level}): gera js, storybook e teste de ${name}`;
+  const message = `feat: gera js, storybook e teste de ${name}`;
   execFileSync('git', ['commit', '-m', message], { cwd: PROJECT_ROOT });
   console.log(`generate-component-files: commit criado — "${message}"`);
 }
