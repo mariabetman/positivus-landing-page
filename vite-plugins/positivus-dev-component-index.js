@@ -1,9 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  COMPONENTS_ROOT,
+  findComponents,
+  isLocalImageSrc,
+} from '../scripts/lib/component-files.js';
 
-const COMPONENTS_ROOT = 'src/components';
 const STYLES_ROOT = 'src/styles';
-const LEVELS = ['atoms', 'molecules', 'organisms'];
 const INDEX_ROUTE = '/__components';
 
 /**
@@ -24,37 +27,14 @@ function renderGlobalStyleLinks(projectRoot, base) {
     .join('\n    ');
 }
 
-/**
- * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes
- * (uma pasta com <nome>.html dentro, ver "Convenção para novos componentes"
- * no CLAUDE.md).
- */
-function findComponents(projectRoot) {
-  const components = [];
-
-  for (const level of LEVELS) {
-    const levelDir = path.join(projectRoot, COMPONENTS_ROOT, level);
-    if (!fs.existsSync(levelDir)) continue;
-
-    for (const name of fs.readdirSync(levelDir)) {
-      const componentDir = path.join(levelDir, name);
-      if (!fs.statSync(componentDir).isDirectory()) continue;
-
-      const htmlFile = path.join(componentDir, `${name}.html`);
-      if (fs.existsSync(htmlFile)) {
-        components.push({ level, name });
-      }
-    }
-  }
-
-  return components;
-}
-
 function renderIndexHtml(components, base, projectRoot) {
-  const groups = LEVELS.map((level) => ({
-    level,
-    items: components.filter((component) => component.level === level),
-  })).filter((group) => group.items.length > 0);
+  const levels = [...new Set(components.map((component) => component.level))];
+  const groups = levels
+    .map((level) => ({
+      level,
+      items: components.filter((component) => component.level === level),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const sectionsHtml = groups
     .map(
@@ -107,6 +87,27 @@ function renderIndexHtml(components, base, projectRoot) {
 }
 
 /**
+ * No componente real, um `<img src="./images/x.svg">` vira um import do
+ * Vite (ver npm run generate:image-imports) que resolve pra a URL de dev do
+ * asset. Como este preview injeta o .html cru (sem passar pelo .js nem pelo
+ * pipeline de import), reescrevemos aqui os `src` locais pra apontar direto
+ * pro arquivo dentro da pasta do componente — senão o navegador resolve o
+ * caminho relativo contra a URL do preview (/__components/<nivel>/<nome>),
+ * que não existe no disco, e a imagem quebra.
+ */
+function resolveComponentImageSrcs(markup, assetBaseUrl) {
+  return markup.replace(
+    /(<img\b[^>]*\ssrc\s*=\s*["'])([^"']+)(["'])/gi,
+    (full, prefix, src, suffix) => {
+      if (!isLocalImageSrc(src)) return full;
+
+      const relativePath = src.replace(/^\.\//, '');
+      return `${prefix}${assetBaseUrl}/${relativePath}${suffix}`;
+    },
+  );
+}
+
+/**
  * Gera a página de preview de um componente na hora, lendo o .html/.css
  * dele direto do disco — não depende de nenhum arquivo .preview.html.
  */
@@ -115,7 +116,11 @@ function renderComponentPreview(projectRoot, base, level, name) {
   const htmlFile = path.join(componentDir, `${name}.html`);
   if (!fs.existsSync(htmlFile)) return null;
 
-  const markup = fs.readFileSync(htmlFile, 'utf-8');
+  const assetBaseUrl = `${base}${COMPONENTS_ROOT}/${level}/${name}`;
+  const markup = resolveComponentImageSrcs(
+    fs.readFileSync(htmlFile, 'utf-8'),
+    assetBaseUrl,
+  );
   const cssFile = path.join(componentDir, `${name}.css`);
   const ownCss = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
 
@@ -204,7 +209,7 @@ export function positivusDevComponentIndex() {
             .slice(routeWithBase.length + 1)
             .split('/');
           const preview =
-            LEVELS.includes(level) && name
+            level && name
               ? renderComponentPreview(server.config.root, base, level, name)
               : null;
 

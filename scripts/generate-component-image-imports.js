@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 import {
   findComponents,
+  isLocalImageSrc,
   toClassName,
   jsTemplate,
 } from './lib/component-files.js';
@@ -26,12 +27,7 @@ function extractImageSources(htmlContent) {
 
   for (const match of matches) {
     const src = match[1];
-    if (
-      /^([a-z]+:)?\/\//i.test(src) ||
-      src.startsWith('data:') ||
-      src.startsWith('/')
-    )
-      continue;
+    if (!isLocalImageSrc(src)) continue;
     if (seen.has(src)) continue;
 
     seen.add(src);
