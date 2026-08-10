@@ -4,26 +4,28 @@ import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const COMPONENT_HTML_PATTERN =
-  /^src\/components\/(atoms|molecules|organisms)\/(positivus-[a-z0-9-]+)\/\2\.html$/;
+const COMPONENTS_ROOT = 'src/components';
+const LEVELS = ['atoms', 'molecules', 'organisms'];
 
-function getStagedAddedFiles() {
-  const output = execFileSync(
-    'git',
-    ['diff', '--cached', '--name-only', '--diff-filter=A'],
-    { cwd: PROJECT_ROOT, encoding: 'utf-8' },
-  );
-
-  return output.split('\n').filter(Boolean);
-}
-
-function findNewComponents(stagedFiles) {
+/**
+ * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes que
+ * já tenham o .html (mesmo padrão do vite-plugins/positivus-dev-component-index.js).
+ */
+function findComponents() {
   const components = [];
 
-  for (const file of stagedFiles) {
-    const match = file.match(COMPONENT_HTML_PATTERN);
-    if (match) {
-      components.push({ level: match[1], name: match[2] });
+  for (const level of LEVELS) {
+    const levelDir = path.join(PROJECT_ROOT, COMPONENTS_ROOT, level);
+    if (!fs.existsSync(levelDir)) continue;
+
+    for (const name of fs.readdirSync(levelDir)) {
+      const componentDir = path.join(levelDir, name);
+      if (!fs.statSync(componentDir).isDirectory()) continue;
+
+      const htmlFile = path.join(componentDir, `${name}.html`);
+      if (fs.existsSync(htmlFile)) {
+        components.push({ level, name });
+      }
     }
   }
 
@@ -94,22 +96,35 @@ function generateMissingFiles({ level, name }) {
     { file: `${name}.test.js`, content: testTemplate(name) },
   ];
 
+  const createdFiles = [];
+
   for (const { file, content } of files) {
     const filePath = path.join(componentDir, file);
     if (fs.existsSync(filePath)) continue;
 
     fs.writeFileSync(filePath, content);
-    execFileSync('git', ['add', filePath], { cwd: PROJECT_ROOT });
+    createdFiles.push(filePath);
     console.log(`generate-component-files: criado ${path.relative(PROJECT_ROOT, filePath)}`);
   }
+
+  return createdFiles;
+}
+
+function commitCreatedFiles(createdFiles, { name }) {
+  if (createdFiles.length === 0) return;
+
+  execFileSync('git', ['add', ...createdFiles], { cwd: PROJECT_ROOT });
+  const message = `feat: gera js, storybook e teste de ${name}`;
+  execFileSync('git', ['commit', '-m', message], { cwd: PROJECT_ROOT });
+  console.log(`generate-component-files: commit criado — "${message}"`);
 }
 
 function main() {
-  const stagedFiles = getStagedAddedFiles();
-  const newComponents = findNewComponents(stagedFiles);
+  const components = findComponents();
 
-  for (const component of newComponents) {
-    generateMissingFiles(component);
+  for (const component of components) {
+    const createdFiles = generateMissingFiles(component);
+    commitCreatedFiles(createdFiles, component);
   }
 }
 
