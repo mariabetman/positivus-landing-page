@@ -2,62 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import {
+  findComponents,
+  toClassName,
+  toLevelTitle,
+  jsTemplate,
+} from './lib/component-files.js';
 
-const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const COMPONENTS_ROOT = 'src/components';
-const LEVELS = ['atoms', 'molecules', 'organisms'];
-
-/**
- * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes que
- * já tenham o .html (mesmo padrão do vite-plugins/positivus-dev-component-index.js).
- */
-function findComponents() {
-  const components = [];
-
-  for (const level of LEVELS) {
-    const levelDir = path.join(PROJECT_ROOT, COMPONENTS_ROOT, level);
-    if (!fs.existsSync(levelDir)) continue;
-
-    for (const name of fs.readdirSync(levelDir)) {
-      const componentDir = path.join(levelDir, name);
-      if (!fs.statSync(componentDir).isDirectory()) continue;
-
-      const htmlFile = path.join(componentDir, `${name}.html`);
-      if (fs.existsSync(htmlFile)) {
-        components.push({ level, name });
-      }
-    }
-  }
-
-  return components;
-}
-
-function toPascalCase(name) {
-  return name
-    .replace(/^positivus-/, '')
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-}
-
-function toLevelTitle(level) {
-  return level.charAt(0).toUpperCase() + level.slice(1);
-}
-
-function jsTemplate(name, className) {
-  return `import { BaseComponent } from '../../base-component.js';
-import template from './${name}.html?raw';
-import styles from './${name}.css?inline';
-
-export class ${className} extends BaseComponent {
-  constructor() {
-    super({ template, styles });
-  }
-}
-
-customElements.define('${name}', ${className});
-`;
-}
+const PROJECT_ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+);
 
 function storiesTemplate(name, className, levelTitle) {
   return `import './${name}.js';
@@ -87,12 +42,15 @@ describe('${name}', () => {
 
 function generateMissingFiles({ level, name }) {
   const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
-  const className = `Positivus${toPascalCase(name)}`;
+  const className = toClassName(name);
   const levelTitle = toLevelTitle(level);
 
   const files = [
     { file: `${name}.js`, content: jsTemplate(name, className) },
-    { file: `${name}.stories.js`, content: storiesTemplate(name, className, levelTitle) },
+    {
+      file: `${name}.stories.js`,
+      content: storiesTemplate(name, className, levelTitle),
+    },
     { file: `${name}.test.js`, content: testTemplate(name) },
   ];
 
@@ -104,7 +62,9 @@ function generateMissingFiles({ level, name }) {
 
     fs.writeFileSync(filePath, content);
     createdFiles.push(filePath);
-    console.log(`generate-component-files: criado ${path.relative(PROJECT_ROOT, filePath)}`);
+    console.log(
+      `generate-component-files: criado ${path.relative(PROJECT_ROOT, filePath)}`,
+    );
   }
 
   return createdFiles;
@@ -120,7 +80,7 @@ function commitCreatedFiles(createdFiles, { name }) {
 }
 
 function main() {
-  const components = findComponents();
+  const components = findComponents(PROJECT_ROOT);
 
   for (const component of components) {
     const createdFiles = generateMissingFiles(component);
@@ -131,7 +91,9 @@ function main() {
 try {
   main();
 } catch (error) {
-  console.error('generate-component-files: falhou ao gerar arquivos do componente');
+  console.error(
+    'generate-component-files: falhou ao gerar arquivos do componente',
+  );
   console.error(error);
   process.exit(1);
 }
