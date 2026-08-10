@@ -26,6 +26,8 @@ npm run test             # testes unitários (Vitest), roda uma vez e sai
 npm run test:watch       # testes unitários em modo watch
 npm run e2e              # testes e2e (Cypress), sobe o dev server sozinho
 npm run cypress:open     # abre o Cypress interativo (precisa do `npm run dev` já rodando)
+npm run generate:component     # gera .js/.stories.js/.test.js de componentes novos
+npm run generate:image-imports # gera o import das imagens locais de componentes no .js
 ```
 
 ## Estrutura de pastas
@@ -51,6 +53,7 @@ src/
         <nome-do-componente>.css
         <nome-do-componente>.stories.js
         <nome-do-componente>.test.js
+        images/                  # opcional: imagens usadas só por este componente
     molecules/               # combinação de poucos atoms com uma única responsabilidade (ex: card, form-group)
       <nome-do-componente>/
         ...
@@ -113,6 +116,7 @@ Regras:
 - O HTML do componente fica em um arquivo `.html` separado, importado no `.js` via `?raw` (Vite) — não usar template literal inline para markup.
 - Estilos ficam encapsulados no Shadow DOM via `adoptedStyleSheets` (import `?inline` do CSS) — evita vazamento de estilo entre componentes.
 - Não introduzir frameworks/bibliotecas de componentes (React, Lit, etc.) — a arquitetura é Web Components nativos por decisão do projeto.
+- Imagens usadas só por um componente ficam em `positivus-<nome>/images/`, referenciadas no `.html` com `<img src="./images/<arquivo>">` normal, como em qualquer HTML — não precisa de nenhuma sintaxe especial. Rodar `npm run generate:image-imports` depois (ver "Geração automática de imports de imagem" abaixo) resolve o resto; ver essa seção pra entender por que um `src` relativo simples não funciona sozinho.
 
 ## Preview automático de componentes (modo dev)
 
@@ -136,6 +140,19 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Pra cada componente com algum arquivo gerado, o comando já faz `git add` só desses arquivos novos e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
+
+## Geração automática de imports de imagem
+
+O `<img src="./images/foo.png">` dentro do `.html` de um componente não funciona sozinho: o template é injetado no Shadow DOM via `this.shadowRoot.innerHTML = template` (ver `src/components/base-component.js`), e nesse momento o navegador resolve caminhos relativos contra o documento atual (a página carregada), não contra o arquivo de origem do componente — a imagem nunca é encontrada, nem em dev nem em build. A única forma seguro nos dois ambientes é um `import` estático de módulo no `.js` (assim o Vite conhece o asset em tempo de build e resolve/hasheia o caminho corretamente); resolver isso em runtime funcionaria só em dev, não no build de produção.
+
+`npm run generate:image-imports` (roda `scripts/generate-component-image-imports.js`) automatiza esse `import`, pra quem cria o componente nunca precisar escrever esse JS na mão — só o `<img src="./images/...">` normal no `.html`. É um comando manual e independente do `npm run generate:component` (nenhum dos dois chama o outro):
+
+- Varre os mesmos componentes que `generate-component-files.js` (`.html` com `<img src="...">` local, ignorando URLs externas/`data:`/caminho absoluto).
+- Se o `.js` do componente **ainda não existir**, cria ele já com o `import` e o wiring da imagem (não depende de `npm run generate:component` ter rodado antes).
+- Se o `.js` **já existir** (gerado ou manual) mas faltar o `import` de alguma imagem nova, insere só o que falta — idempotente, roda quantas vezes quiser sem duplicar nada.
+- Pra cada imagem, gera `import img<NomeDoArquivo> from './images/<arquivo>';` e, no `constructor`, `this.$$('img[src="./images/<arquivo>"]').forEach((img) => { img.src = img<NomeDoArquivo>; });`.
+- Mesma regra de commit do `generate-component-files.js`: `git add` só do `.js` alterado e commit próprio (`feat: adiciona import de imagens em positivus-<nome>`, sem escopo).
+- Não reconhece imagem referenciada via CSS (`background-image: url(...)`) porque não precisa — `url()` dentro do `.css` do componente já é resolvido corretamente pelo Vite (o CSS passa pelo pipeline de assets antes de virar string `?inline`), diferente do `.html`.
 
 ## Storybook
 
