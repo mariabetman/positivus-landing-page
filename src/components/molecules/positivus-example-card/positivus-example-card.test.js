@@ -14,6 +14,7 @@ describe('positivus-example-card', () => {
     expect(el.shadowRoot.querySelector('.card__text').textContent).toBe(
       'Este é um componente de exemplo.',
     );
+    expect(el.shadowRoot.querySelector('.card__image')).not.toBeNull();
 
     el.remove();
   });

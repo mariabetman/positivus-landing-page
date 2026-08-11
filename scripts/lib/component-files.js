@@ -2,7 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export const COMPONENTS_ROOT = 'src/components';
-export const LEVELS = ['atoms', 'molecules', 'organisms'];
+
+/**
+ * Níveis do Atomic Design existentes no projeto (ex: atoms, molecules,
+ * organisms, e futuramente templates, pages, etc.) — descobertos lendo as
+ * subpastas de src/components/ em vez de uma lista fixa, pra reconhecer
+ * automaticamente um nível novo assim que a pasta for criada.
+ */
+export function listLevels(projectRoot) {
+  const componentsDir = path.join(projectRoot, COMPONENTS_ROOT);
+  if (!fs.existsSync(componentsDir)) return [];
+
+  return fs
+    .readdirSync(componentsDir)
+    .filter((entry) =>
+      fs.statSync(path.join(componentsDir, entry)).isDirectory(),
+    );
+}
 
 /**
  * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes que
@@ -11,9 +27,8 @@ export const LEVELS = ['atoms', 'molecules', 'organisms'];
 export function findComponents(projectRoot) {
   const components = [];
 
-  for (const level of LEVELS) {
+  for (const level of listLevels(projectRoot)) {
     const levelDir = path.join(projectRoot, COMPONENTS_ROOT, level);
-    if (!fs.existsSync(levelDir)) continue;
 
     for (const name of fs.readdirSync(levelDir)) {
       const componentDir = path.join(levelDir, name);
@@ -43,6 +58,20 @@ export function toLevelTitle(level) {
 
 export function toClassName(name) {
   return `Positivus${toPascalCase(name)}`;
+}
+
+const EXTERNAL_URL_PATTERN = /^([a-z]+:)?\/\//i;
+
+/**
+ * Um `src` de `<img>` conta como asset local (candidato a import do Vite)
+ * quando não é http(s)/protocol-relative, `data:` nem um caminho absoluto.
+ */
+export function isLocalImageSrc(src) {
+  return !(
+    EXTERNAL_URL_PATTERN.test(src) ||
+    src.startsWith('data:') ||
+    src.startsWith('/')
+  );
 }
 
 /**
