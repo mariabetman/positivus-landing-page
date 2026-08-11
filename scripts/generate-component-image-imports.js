@@ -158,15 +158,30 @@ function commitTouchedFile(filePath, { name }) {
 
 function main() {
   const components = findComponents(PROJECT_ROOT);
+  let hasError = false;
 
   for (const component of components) {
-    const touchedFile = processComponent(component);
-    commitTouchedFile(touchedFile, component);
+    const label = `${component.level}/${component.name}`;
+
+    try {
+      const touchedFile = processComponent(component);
+      commitTouchedFile(touchedFile, component);
+      console.log(`generate-component-image-imports: ${label} ok`);
+    } catch (error) {
+      hasError = true;
+      console.error(`generate-component-image-imports: falhou em ${label}`);
+      console.error(error);
+    }
   }
+
+  return hasError;
 }
 
 try {
-  main();
+  const hasError = main();
+  if (hasError) {
+    process.exit(1);
+  }
 } catch (error) {
   console.error(
     'generate-component-image-imports: falhou ao gerar imports de imagens',
