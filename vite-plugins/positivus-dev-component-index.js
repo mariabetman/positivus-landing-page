@@ -8,6 +8,7 @@ import {
 
 const STYLES_ROOT = 'src/styles';
 const INDEX_ROUTE = '/__components';
+const IMG_SRC_ATTRIBUTE_PATTERN = /(<img\b[^>]*\ssrc\s*=\s*["'])([^"']+)(["'])/gi;
 
 /**
  * Lista os .css de src/styles/ e monta as tags <link> correspondentes, pra
@@ -97,7 +98,7 @@ function renderIndexHtml(components, base, projectRoot) {
  */
 function resolveComponentImageSrcs(markup, assetBaseUrl) {
   return markup.replace(
-    /(<img\b[^>]*\ssrc\s*=\s*["'])([^"']+)(["'])/gi,
+    IMG_SRC_ATTRIBUTE_PATTERN,
     (full, prefix, src, suffix) => {
       if (!isLocalImageSrc(src)) return full;
 

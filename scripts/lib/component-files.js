@@ -60,13 +60,15 @@ export function toClassName(name) {
   return `Positivus${toPascalCase(name)}`;
 }
 
+const EXTERNAL_URL_PATTERN = /^([a-z]+:)?\/\//i;
+
 /**
  * Um `src` de `<img>` conta como asset local (candidato a import do Vite)
  * quando não é http(s)/protocol-relative, `data:` nem um caminho absoluto.
  */
 export function isLocalImageSrc(src) {
   return !(
-    /^([a-z]+:)?\/\//i.test(src) ||
+    EXTERNAL_URL_PATTERN.test(src) ||
     src.startsWith('data:') ||
     src.startsWith('/')
   );
