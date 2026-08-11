@@ -10,6 +10,7 @@
 
 .card__image {
   width: 100%;
+  max-width: 240px;
   height: auto;
   margin-bottom: 0.75rem;
 }
