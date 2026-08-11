@@ -9,23 +9,41 @@ import {
 const STYLES_ROOT = 'src/styles';
 const INDEX_ROUTE = '/__components';
 const IMG_SRC_ATTRIBUTE_PATTERN = /(<img\b[^>]*\ssrc\s*=\s*["'])([^"']+)(["'])/gi;
+const HEAD_CONTENT_PATTERN = /<head[^>]*>([\s\S]*?)<\/head>/i;
+const TITLE_TAG_PATTERN = /<title>[\s\S]*?<\/title>/i;
+const HREF_OR_SRC_ATTRIBUTE_PATTERN = /((?:href|src)\s*=\s*["'])([^"']+)(["'])/gi;
 
 /**
- * Lista os .css de src/styles/ e monta as tags <link> correspondentes, pra
- * que qualquer arquivo novo nessa pasta apareça nas páginas de dev sem
- * precisar editar este plugin. Ordem alfabética, que já mantém reset.css
- * antes de typograph.css (a ordem que importa pra cascata).
+ * Reaproveita o <head> do index.html real (viewport, favicon, title, links
+ * de CSS/fonts) em vez de manter uma cópia à mão aqui — qualquer coisa nova
+ * adicionada ao <head> do site (uma tag, um novo CSS global, etc.) passa a
+ * aparecer nas páginas de dev sozinha, sem precisar editar este plugin. Só
+ * o <title> é sobrescrito, já que aqui é uma página diferente do site real.
+ *
+ * Um `href`/`src` relativo tipo `./favicon.svg` funciona no index.html real
+ * porque ele mora na raiz do site; nas rotas de preview (que podem estar
+ * 2+ níveis "abaixo" de /__components) o mesmo relativo resolveria errado.
+ * Convertemos pra absoluto a partir da raiz (`/favicon.svg`) e deixamos o
+ * `server.transformIndexHtml` (chamado por quem usa este HTML) adicionar o
+ * `base` sozinho — é o que ele já faz com os `/src/...` do próprio
+ * index.html, então não fazemos isso à mão aqui pra não duplicar o prefixo.
  */
-function renderGlobalStyleLinks(projectRoot, base) {
-  const stylesDir = path.join(projectRoot, STYLES_ROOT);
-  const files = fs
-    .readdirSync(stylesDir)
-    .filter((file) => file.endsWith('.css'))
-    .sort();
+function readIndexHeadHtml(projectRoot, title) {
+  const indexHtml = fs.readFileSync(path.join(projectRoot, 'index.html'), 'utf-8');
+  const match = HEAD_CONTENT_PATTERN.exec(indexHtml);
+  const headContent = match ? match[1] : '';
 
-  return files
-    .map((file) => `<link rel="stylesheet" href="${base}${STYLES_ROOT}/${file}" />`)
-    .join('\n    ');
+  const withTitle = headContent.replace(TITLE_TAG_PATTERN, `<title>${title}</title>`);
+
+  return withTitle.replace(
+    HREF_OR_SRC_ATTRIBUTE_PATTERN,
+    (full, prefix, url, suffix) => {
+      if (!isLocalImageSrc(url)) return full;
+
+      const relativePath = url.replace(/^\.\//, '');
+      return `${prefix}/${relativePath}${suffix}`;
+    },
+  );
 }
 
 function renderIndexHtml(components, base, projectRoot) {
@@ -57,15 +75,7 @@ function renderIndexHtml(components, base, projectRoot) {
   return `<!doctype html>
 <html lang="pt-BR">
   <head>
-    <meta charset="UTF-8" />
-    <title>Componentes — Positivus (dev)</title>
-    ${renderGlobalStyleLinks(projectRoot, base)}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
-      rel="stylesheet"
-    />
+    ${readIndexHeadHtml(projectRoot, 'Componentes — Positivus (dev)')}
     <style>
       body { margin: 2rem; color: #1a1a1a; }
       h1 { margin-bottom: 0.25rem; }
@@ -141,15 +151,7 @@ function renderComponentPreview(projectRoot, base, level, name) {
   return `<!doctype html>
 <html lang="pt-BR">
   <head>
-    <meta charset="UTF-8" />
-    <title>Preview: ${name}</title>
-    ${renderGlobalStyleLinks(projectRoot, base)}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap"
-      rel="stylesheet"
-    />
+    ${readIndexHeadHtml(projectRoot, `Preview: ${name}`)}
   </head>
   <body>
     <div id="preview-host"></div>
@@ -193,15 +195,19 @@ export function positivusDevComponentIndex() {
       const base = server.config.base;
       const routeWithBase = `${base.replace(/\/$/, '')}${INDEX_ROUTE}`;
 
-      server.middlewares.use((req, res, next) => {
+      server.middlewares.use(async (req, res, next) => {
         const pathname = req.url
           ? req.url.split('?')[0].replace(/\/$/, '')
           : '';
 
         if (pathname === routeWithBase) {
           const components = findComponents(server.config.root);
+          const html = await server.transformIndexHtml(
+            req.url,
+            renderIndexHtml(components, base, server.config.root),
+          );
           res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.end(renderIndexHtml(components, base, server.config.root));
+          res.end(html);
           return;
         }
 
@@ -215,8 +221,9 @@ export function positivusDevComponentIndex() {
               : null;
 
           if (preview) {
+            const html = await server.transformIndexHtml(req.url, preview);
             res.setHeader('Content-Type', 'text/html; charset=utf-8');
-            res.end(preview);
+            res.end(html);
           } else {
             res.statusCode = 404;
             res.end(`Componente não encontrado: ${level}/${name}`);
