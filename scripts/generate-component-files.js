@@ -81,15 +81,30 @@ function commitCreatedFiles(createdFiles, { name }) {
 
 function main() {
   const components = findComponents(PROJECT_ROOT);
+  let hasError = false;
 
   for (const component of components) {
-    const createdFiles = generateMissingFiles(component);
-    commitCreatedFiles(createdFiles, component);
+    const label = `${component.level}/${component.name}`;
+
+    try {
+      const createdFiles = generateMissingFiles(component);
+      commitCreatedFiles(createdFiles, component);
+      console.log(`generate-component-files: ${label} ok`);
+    } catch (error) {
+      hasError = true;
+      console.error(`generate-component-files: falhou em ${label}`);
+      console.error(error);
+    }
   }
+
+  return hasError;
 }
 
 try {
-  main();
+  const hasError = main();
+  if (hasError) {
+    process.exit(1);
+  }
 } catch (error) {
   console.error(
     'generate-component-files: falhou ao gerar arquivos do componente',
