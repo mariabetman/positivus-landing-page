@@ -66,6 +66,8 @@ npm run storybook         # Storybook dev server (http://localhost:6006)
 npm run build-storybook   # build estático do Storybook em storybook-static/
 npm run test              # testes unitários (Vitest)
 npm run e2e               # testes e2e (Cypress), sobe o dev server sozinho
+npm run generate:component      # gera .js/.stories.js/.test.js de componentes novos
+npm run generate:image-imports  # gera o import das imagens locais de componentes no .js
 ```
 
 ## Estrutura
@@ -84,7 +86,7 @@ src/
     base-component.js            # classe base (Shadow DOM + adopted stylesheets)
     atoms/                        # elementos indivisíveis
     molecules/
-      positivus-example-card/     # exemplo de componente (.html, .css, .js, .stories.js, .test.js)
+      positivus-example-card/     # exemplo de componente (.html, .css, .js, .stories.js, .test.js, images/)
     organisms/                    # seções completas da página
 public/
   favicon.svg
@@ -193,5 +195,21 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
     git add src/components/atoms/positivus-button src/main.js
     git commit -m "feat(atoms): adiciona positivus-button"
     ```
+
+## Passo a passo: adicionando uma imagem a um componente
+
+Imagens usadas só por um componente ficam dentro da própria pasta dele, em `images/`. Exemplo de verdade já no projeto: [positivus-example-card](./src/components/molecules/positivus-example-card).
+
+1. **Coloque o arquivo** em `positivus-<nome>/images/<arquivo>` (ex: `positivus-example-card/images/example.svg`).
+
+2. **Use `<img>` normal no `.html`** — sem sintaxe especial:
+
+   ```html
+   <img src="./images/example.svg" alt="Descrição da imagem" />
+   ```
+
+3. **Rode `npm run generate:image-imports`.** Esse comando lê os `<img src="...">` locais do `.html` e adiciona/atualiza o `import` da imagem no `.js` do componente sozinho — um `src` relativo simples não funciona sozinho aqui (o motivo está detalhado em [CLAUDE.md](./CLAUDE.md#geração-automática-de-imports-de-imagem)). O comando já commita o `.js` alterado; o `.html`/`.css`/`images/` continuam sendo commitados por quem os criou.
+
+4. **Veja funcionando** — tanto no preview de dev (`/__components/<nível>/<nome>`) quanto em `npm run build` + `npm run preview`, já que a imagem passa a ser resolvida como um asset real do Vite nos dois ambientes.
 
 Detalhes de cada regra (nomenclatura, BEM, Atomic Design, commits/branches, deploy, etc.) estão documentados em [CLAUDE.md](./CLAUDE.md).
