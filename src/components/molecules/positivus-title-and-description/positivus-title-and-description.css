@@ -1,0 +1,32 @@
+:host {
+    display: block;
+}
+
+.title-and-description {
+    display: flex;
+    flex-direction: column;
+    padding: 1rem;
+    gap: 1.25rem;
+    max-width: var(--desktop-max-width);
+    margin: auto;
+}
+
+.title-and-description__title {
+    background-color: var(--green);
+    width: fit-content;
+    padding: 0 0.438rem;
+    border-radius: 0.438rem;
+}
+
+@media (min-width:1024px) {
+    .title-and-description {
+        flex-direction: row;
+        gap: 2.5rem;
+        align-items: center;
+    }
+
+    .title-and-description__description {
+        width: 100%;
+        max-width: 580px;
+    }
+}
