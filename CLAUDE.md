@@ -26,6 +26,8 @@ npm run test             # testes unitários (Vitest), roda uma vez e sai
 npm run test:watch       # testes unitários em modo watch
 npm run e2e              # testes e2e (Cypress), sobe o dev server sozinho
 npm run cypress:open     # abre o Cypress interativo (precisa do `npm run dev` já rodando)
+npm run generate:component     # gera .js/.stories.js/.test.js de componentes novos
+npm run generate:image-imports # gera o import das imagens locais de componentes no .js
 ```
 
 ## Estrutura de pastas
@@ -51,6 +53,7 @@ src/
         <nome-do-componente>.css
         <nome-do-componente>.stories.js
         <nome-do-componente>.test.js
+        images/                  # opcional: imagens usadas só por este componente
     molecules/               # combinação de poucos atoms com uma única responsabilidade (ex: card, form-group)
       <nome-do-componente>/
         ...
@@ -101,7 +104,7 @@ Cada componente é isolado em sua própria pasta dentro do nível correto (`atom
 
 Não é preciso criar nenhum arquivo de preview manualmente — rodando `npm run dev`, o preview do HTML/CSS do componente é gerado automaticamente (ver "Preview automático de componentes" abaixo).
 
-Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: um hook de `pre-commit` (`scripts/generate-component-files.js`, ver "Geração automática de arquivos de componente" abaixo) detecta um `.html` novo de componente no commit e gera os 3 arquivos automaticamente, caso ainda não existam, incluindo-os no mesmo commit. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
+Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: depois de criar o `.html`/`.css`, rode `npm run generate:component` (ver "Geração automática de arquivos de componente" abaixo) pra gerar os 3 arquivos automaticamente, caso ainda não existam. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
 
 Regras:
 
@@ -113,6 +116,7 @@ Regras:
 - O HTML do componente fica em um arquivo `.html` separado, importado no `.js` via `?raw` (Vite) — não usar template literal inline para markup.
 - Estilos ficam encapsulados no Shadow DOM via `adoptedStyleSheets` (import `?inline` do CSS) — evita vazamento de estilo entre componentes.
 - Não introduzir frameworks/bibliotecas de componentes (React, Lit, etc.) — a arquitetura é Web Components nativos por decisão do projeto.
+- Imagens usadas só por um componente ficam em `positivus-<nome>/images/`, referenciadas no `.html` com `<img src="./images/<arquivo>">` normal, como em qualquer HTML — não precisa de nenhuma sintaxe especial. Rodar `npm run generate:image-imports` depois (ver "Geração automática de imports de imagem" abaixo) resolve o resto; ver essa seção pra entender por que um `src` relativo simples não funciona sozinho.
 
 ## Preview automático de componentes (modo dev)
 
@@ -122,21 +126,33 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Rotas servidas só em dev:
   - `/__components` → lista os componentes (varre `src/components/<nivel>/positivus-<nome>/` procurando pastas com um `<nome>.html`).
   - `/__components/<nivel>/<nome>` → preview do componente: lê o `.html`/`.css` do disco e monta um Shadow DOM de verdade via `<script>` (`attachShadow` + `<style>` com o CSS do componente) — a regra `:host { ... }` funciona igual funcionaria no componente real.
-- As duas páginas acima carregam, no `<head>` (fora do Shadow DOM), todo `.css` que existir em `src/styles/` — a lista é montada dinamicamente (`fs.readdirSync`), então um arquivo novo nessa pasta (ex: `colors.css`) aparece automaticamente, sem editar o plugin. Já o CSS injetado dentro do Shadow DOM simulado do preview (reset + `typograph.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos.
+- O `<head>` das duas páginas acima (fora do Shadow DOM) é lido direto do `<head>` do `index.html` real — viewport, favicon, título (sobrescrito pelo da própria página de dev), links de CSS globais e fonts. Qualquer coisa nova adicionada ao `<head>` do site (uma meta tag, um novo CSS global, etc.) aparece nas páginas de dev sozinha, sem editar o plugin. Um `href`/`src` relativo do jeito que está no `index.html` (ex: `./favicon.svg`) só funciona lá porque o `index.html` mora na raiz do site; como as rotas de preview podem estar níveis abaixo de `/__components`, o plugin reescreve esses caminhos relativos pra absolutos antes de devolver o HTML pra `server.transformIndexHtml` (que resolve o `base`, injeta o client do HMR, etc. — o mesmo pipeline que o Vite usa pro `index.html` de verdade). Já o CSS injetado dentro do Shadow DOM simulado do preview (reset + `typograph.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos.
 - Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
 
 ## Geração automática de arquivos de componente
 
-Um hook de `pre-commit` (Husky) roda `scripts/generate-component-files.js` antes de todo commit:
+`npm run generate:component` (roda `scripts/generate-component-files.js`) é um comando manual, não um hook de git — não dispara sozinho em nenhum momento, precisa ser chamado explicitamente. Essa decisão é proposital: um hook de `pre-commit` (via Husky) foi tentado antes, mas depende de cada dev ter o Husky instalado corretamente (o que pode falhar silenciosamente, ex: `npm config get ignore-scripts` como `true` bloqueando o `prepare` do Husky sem aviso nenhum) — um comando manual sempre funciona igual, independente da máquina.
 
-- Verifica os arquivos **adicionados no stage** (`git diff --cached --diff-filter=A`) procurando um `.html` novo dentro de `src/components/<nivel>/positivus-<nome>/`.
-- Pra cada componente novo encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
+- Varre `src/components/<nivel>/positivus-<nome>/` procurando toda pasta que já tenha um `.html` (mesma lógica de `vite-plugins/positivus-dev-component-index.js`).
+- Pra cada componente encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
 - O teste gerado é mínimo (só confirma que a tag foi registrada via `customElements.get`) — não tenta adivinhar o conteúdo real do `.html`, que quem criou o componente pode complementar depois.
-- Os arquivos gerados são incluídos automaticamente no mesmo commit (`git add`).
+- Pra cada componente com algum arquivo gerado, o comando já faz `git add` só desses arquivos novos e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
-- Pra rodar manualmente sem commitar (ex: pra testar), use `npm run generate:component`.
+
+## Geração automática de imports de imagem
+
+O `<img src="./images/foo.png">` dentro do `.html` de um componente não funciona sozinho: o template é injetado no Shadow DOM via `this.shadowRoot.innerHTML = template` (ver `src/components/base-component.js`), e nesse momento o navegador resolve caminhos relativos contra o documento atual (a página carregada), não contra o arquivo de origem do componente — a imagem nunca é encontrada, nem em dev nem em build. A única forma seguro nos dois ambientes é um `import` estático de módulo no `.js` (assim o Vite conhece o asset em tempo de build e resolve/hasheia o caminho corretamente); resolver isso em runtime funcionaria só em dev, não no build de produção.
+
+`npm run generate:image-imports` (roda `scripts/generate-component-image-imports.js`) automatiza esse `import`, pra quem cria o componente nunca precisar escrever esse JS na mão — só o `<img src="./images/...">` normal no `.html`. É um comando manual e independente do `npm run generate:component` (nenhum dos dois chama o outro):
+
+- Varre os mesmos componentes que `generate-component-files.js` (`.html` com `<img src="...">` local, ignorando URLs externas/`data:`/caminho absoluto).
+- Se o `.js` do componente **ainda não existir**, cria ele já com o `import` e o wiring da imagem (não depende de `npm run generate:component` ter rodado antes).
+- Se o `.js` **já existir** (gerado ou manual) mas faltar o `import` de alguma imagem nova, insere só o que falta — idempotente, roda quantas vezes quiser sem duplicar nada.
+- Pra cada imagem, gera `import img<NomeDoArquivo> from './images/<arquivo>';` e, no `constructor`, `this.$$('img[src="./images/<arquivo>"]').forEach((img) => { img.src = img<NomeDoArquivo>; });`.
+- Mesma regra de commit do `generate-component-files.js`: `git add` só do `.js` alterado e commit próprio (`feat: adiciona import de imagens em positivus-<nome>`, sem escopo).
+- Não reconhece imagem referenciada via CSS (`background-image: url(...)`) porque não precisa — `url()` dentro do `.css` do componente já é resolvido corretamente pelo Vite (o CSS passa pelo pipeline de assets antes de virar string `?inline`), diferente do `.html`.
 
 ## Storybook
 

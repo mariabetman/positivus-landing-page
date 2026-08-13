@@ -1,0 +1,38 @@
+.logos {
+    margin: auto;
+    padding: 1rem;
+    max-width: 80rem;
+}
+
+.logos__list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    align-items: center;
+    width: 100%;
+    margin: 0;
+}
+
+.logos__image {
+    height: 3rem;
+    width: auto;
+    filter: grayscale(100%);
+    opacity: 0.8;
+}
+
+@media (min-width: 48rem) {
+    .logos {
+        display: none;
+    }
+}
+
+@media (min-width: 64rem) {
+    .logos {
+        display: block;  
+    }
+
+    .logos__list {
+        flex-direction: row;
+        justify-content: space-between;
+    }
+}
