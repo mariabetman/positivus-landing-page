@@ -1,5 +1,6 @@
 import reset from '../styles/reset.css?inline';
 import typograph from '../styles/typograph.css?inline';
+import global from '../styles/global.css?inline';
 
 const resetStylesheet = new CSSStyleSheet();
 resetStylesheet.replaceSync(reset);
@@ -7,12 +8,19 @@ resetStylesheet.replaceSync(reset);
 const typographStylesheet = new CSSStyleSheet();
 typographStylesheet.replaceSync(typograph);
 
+const globalStylesheet = new CSSStyleSheet();
+globalStylesheet.replaceSync(global);
+
 export class BaseComponent extends HTMLElement {
   constructor({ template = '', styles = '' } = {}) {
     super();
     this.attachShadow({ mode: 'open' });
 
-    this.shadowRoot.adoptedStyleSheets = [resetStylesheet, typographStylesheet];
+    this.shadowRoot.adoptedStyleSheets = [
+      resetStylesheet,
+      typographStylesheet,
+      globalStylesheet,
+    ];
 
     if (styles) {
       this.#adoptStylesheet(styles);

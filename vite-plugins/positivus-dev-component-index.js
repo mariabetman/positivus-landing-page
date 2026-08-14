@@ -118,6 +118,30 @@ function resolveComponentImageSrcs(markup, assetBaseUrl) {
   );
 }
 
+function readStyle(projectRoot, fileName) {
+  return fs.readFileSync(path.join(projectRoot, STYLES_ROOT, fileName), 'utf-8');
+}
+
+/**
+ * src/styles/reset.css é só `@import 'eric-meyer-reset/...'` (mais qualquer
+ * regra extra que alguém adicione ali). Diferente do BaseComponent real, que
+ * importa esse arquivo via pipeline do Vite (resolve o @import sozinho), este
+ * plugin lê o arquivo cru do disco — um @import com specifier de pacote (não
+ * uma URL relativa) não é algo que o navegador consiga resolver dentro da
+ * <style> desta página. Por isso resolvemos manualmente: injeta o CSS real
+ * do pacote e remove a linha de @import do restante do arquivo.
+ */
+function readResetCss(projectRoot) {
+  const raw = readStyle(projectRoot, 'reset.css');
+  const withoutImport = raw.replace(/@import\s+['"][^'"]+['"]\s*;/, '');
+  const meyerResetCss = fs.readFileSync(
+    path.join(projectRoot, 'node_modules/eric-meyer-reset/eric-meyer-reset.css'),
+    'utf-8',
+  );
+
+  return `${meyerResetCss}\n${withoutImport}`;
+}
+
 /**
  * Gera a página de preview de um componente na hora, lendo o .html/.css
  * dele direto do disco — não depende de nenhum arquivo .preview.html.
@@ -135,18 +159,10 @@ function renderComponentPreview(projectRoot, base, level, name) {
   const cssFile = path.join(componentDir, `${name}.css`);
   const ownCss = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
 
-  // Mesma ordem/estilos que o BaseComponent real adota no Shadow DOM
-  // (ver src/components/base-component.js): reset, tipografia e só então
+  // Mesma ordem que o BaseComponent real adota no Shadow DOM (ver
+  // src/components/base-component.js): reset, tipografia, global e só então
   // o CSS do próprio componente.
-  const resetCss = fs.readFileSync(
-    path.join(projectRoot, 'node_modules/eric-meyer-reset/eric-meyer-reset.css'),
-    'utf-8',
-  );
-  const typographCss = fs.readFileSync(
-    path.join(projectRoot, STYLES_ROOT, 'typograph.css'),
-    'utf-8',
-  );
-  const css = `${resetCss}\n${typographCss}\n${ownCss}`;
+  const css = `${readResetCss(projectRoot)}\n${readStyle(projectRoot, 'typograph.css')}\n${readStyle(projectRoot, 'global.css')}\n${ownCss}`;
 
   return `<!doctype html>
 <html lang="pt-BR">
