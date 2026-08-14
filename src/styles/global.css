@@ -1,10 +1,9 @@
 :root {
-  --content-max-width: 1440px;
-}
-
-.container {
-  width: 100%;
-  max-width: 1440px;
-  margin-inline: auto;
-  padding-inline: 1.5rem;
+  /* colors */
+  --green: #B9FF66;
+  --black: #191A23;
+  --white: #F3F3F3;
+  
+  /* desktop width */
+  --desktop-max-width: 1280px;
 }
