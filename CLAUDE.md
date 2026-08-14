@@ -43,7 +43,7 @@ src/
   main.js                 # importa/registra todos os componentes
   styles/
     reset.css               # @import do pacote eric-meyer-reset (Meyer Reset v2.0), antes do global.css
-    global.css              # estilos globais/.container
+    global.css              # estilos globais/.container, também adotado dentro do Shadow DOM de todo componente (ver base-component.js)
   components/
     base-component.js       # classe base: Shadow DOM + adopted stylesheets
     atoms/                   # elementos indivisíveis (ex: botão, input, ícone)
@@ -126,7 +126,7 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Rotas servidas só em dev:
   - `/__components` → lista os componentes (varre `src/components/<nivel>/positivus-<nome>/` procurando pastas com um `<nome>.html`).
   - `/__components/<nivel>/<nome>` → preview do componente: lê o `.html`/`.css` do disco e monta um Shadow DOM de verdade via `<script>` (`attachShadow` + `<style>` com o CSS do componente) — a regra `:host { ... }` funciona igual funcionaria no componente real.
-- As duas páginas acima carregam, no `<head>` (fora do Shadow DOM), todo `.css` que existir em `src/styles/` — a lista é montada dinamicamente (`fs.readdirSync`), então um arquivo novo nessa pasta (ex: `colors.css`) aparece automaticamente, sem editar o plugin. Já o CSS injetado dentro do Shadow DOM simulado do preview (reset + `typograph.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos.
+- As duas páginas acima carregam, no `<head>` (fora do Shadow DOM), todo `.css` que existir em `src/styles/` — a lista é montada dinamicamente (`fs.readdirSync`), então um arquivo novo nessa pasta (ex: `colors.css`) aparece automaticamente, sem editar o plugin. Já o CSS injetado dentro do Shadow DOM simulado do preview (`reset.css` + `typograph.css` + `global.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos. Como o plugin lê `reset.css` cru do disco (sem passar pelo pipeline de CSS do Vite), o `@import 'eric-meyer-reset/...'` daquele arquivo não resolve sozinho dentro do `<style>` da página de preview — o plugin trata esse caso à parte (ver `readResetCss` em `positivus-dev-component-index.js`), injetando o CSS real do pacote e removendo a linha de `@import` do restante do arquivo.
 - Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
 
