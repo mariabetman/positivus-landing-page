@@ -66,8 +66,8 @@ npm run storybook         # Storybook dev server (http://localhost:6006)
 npm run build-storybook   # build estático do Storybook em storybook-static/
 npm run test              # testes unitários (Vitest)
 npm run e2e               # testes e2e (Cypress), sobe o dev server sozinho
-npm run generate:component      # gera .js/.stories.js/.test.js de componentes novos
-npm run generate:image-imports  # gera o import das imagens locais de componentes no .js
+npm run generate:component            # gera .js/.stories.js/.test.js de componentes novos
+npm run generate:composition-imports  # gera o import de componentes usados dentro de outro (ou na index.html)
 ```
 
 ## Estrutura
@@ -76,20 +76,26 @@ npm run generate:image-imports  # gera o import das imagens locais de componente
 .github/workflows/deploy.yml   # CI: build + deploy no GitHub Pages
 .storybook/                    # configuração do Storybook (main.js, preview.js)
 vite-plugins/                  # plugins Vite locais (índice/preview de componentes em dev)
+scripts/                       # geradores de arquivo (generate:component, generate:composition-imports)
 cypress/e2e/                   # specs de e2e (*.cy.js)
 cypress.config.js
 index.html
 src/
-  main.js                        # registra os componentes usados na página
+  main.js                        # registra os componentes usados na página/uns nos outros
   styles/                        # reset.css + global.css
   components/
-    base-component.js            # classe base (Shadow DOM + adopted stylesheets)
+    base-component.js            # classe base (Shadow DOM + adopted stylesheets + props via atributo)
+    base-component.md            # como o BaseComponent funciona por dentro
+    component-props.md           # convenção de props (data-prop) e composição, com exemplos
     atoms/                        # elementos indivisíveis
     molecules/
-      positivus-example-card/     # exemplo de componente (.html, .css, .js, .stories.js, .test.js, images/)
-    organisms/                    # seções completas da página
+      positivus-example-card/     # exemplo de componente (.html, .css, .js, .stories.js, .test.js)
+    organisms/
+      positivus-card-list/        # exemplo de composição (usa positivus-example-card dentro)
 public/
   favicon.svg
+  assets/
+    <nível>/<nome-do-componente>/  # imagens usadas por cada componente (ver seção de imagens abaixo)
 ```
 
 ## Passo a passo: criando um componente novo
@@ -98,12 +104,10 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
 
 1. **Crie a pasta** `src/components/atoms/positivus-button/` (nome sempre com prefixo `positivus-`).
 
-2. **Markup** — `positivus-button.html`:
+2. **Markup** — `positivus-button.html`. Marque com `data-prop`/`data-prop-<atributo>` qualquer parte que deva aceitar um valor diferente por uso (texto, link, imagem — ver "Passo a passo: parametrizando um componente com props" abaixo); o que não for marcado fica fixo:
 
    ```html
-   <button class="button">
-     <slot></slot>
-   </button>
+   <a class="button" href="#" data-prop-href="link" data-prop="text">Clique aqui</a>
    ```
 
 3. **Estilos** — `positivus-button.css` (classes em BEM, `:host` para o próprio elemento):
@@ -118,7 +122,7 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
    }
    ```
 
-4. **Classe do componente** — `positivus-button.js`:
+4. **Rode `npm run generate:component`.** Gera `positivus-button.js`, `positivus-button.stories.js` e `positivus-button.test.js` sozinho, a partir do `.html`/`.css` que você criou — não precisa escrever esses três arquivos na mão. O `.js` gerado já sai assim:
 
    ```js
    import { BaseComponent } from '../../base-component.js';
@@ -126,6 +130,8 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
    import styles from './positivus-button.css?inline';
 
    export class PositivusButton extends BaseComponent {
+     static observedAttributes = BaseComponent.extractPropNames(template);
+
      constructor() {
        super({ template, styles });
      }
@@ -134,82 +140,77 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
    customElements.define('positivus-button', PositivusButton);
    ```
 
-5. **Story do Storybook** (obrigatória) — `positivus-button.stories.js`:
+   A `static observedAttributes` é o que faz os `data-prop`/`data-prop-<atributo>` do passo 2 funcionarem — ela é calculada automaticamente a partir do `.html`, não precisa editar isso na mão nunca.
 
-   ```js
-   import './positivus-button.js';
+5. **Complemente o teste e a story gerados** (eles saem mínimos, só confirmando que a tag foi registrada) — ex: testar que o link/texto padrão aparece, e que passar `link="..."` via atributo troca o `href` de verdade.
 
-   export default {
-     title: 'Atoms/PositivusButton',
-     tags: ['autodocs'],
-   };
-
-   export const Default = {
-     render: () => document.createElement('positivus-button'),
-   };
-   ```
-
-6. **Teste unitário** (obrigatório) — `positivus-button.test.js`:
-
-   ```js
-   import { describe, expect, it } from 'vitest';
-   import './positivus-button.js';
-
-   describe('positivus-button', () => {
-     it('renders the button markup inside its Shadow DOM', () => {
-       const el = document.createElement('positivus-button');
-       document.body.append(el);
-
-       expect(el.shadowRoot.querySelector('.button')).not.toBeNull();
-
-       el.remove();
-     });
-   });
-   ```
-
-7. **Registre o componente** em [src/main.js](./src/main.js):
-
-   ```js
-   import './components/atoms/positivus-button/positivus-button.js';
-   ```
-
-8. **Use a tag** onde precisar (`index.html` ou dentro do `.html` de outro componente):
+6. **Use a tag** onde precisar — `index.html`, ou dentro do `.html` de outro componente:
 
    ```html
-   <positivus-button>Clique aqui</positivus-button>
+   <positivus-button link="https://exemplo.com" text="Fale conosco"></positivus-button>
    ```
 
-9. **Veja funcionando** — rode `npm run dev`. O navegador abre sozinho numa página listando todos os componentes (agrupados por Atoms/Molecules/Organisms); o `positivus-button` já aparece lá assim que o `.html` existir. Clique nele pra ver o preview do HTML/CSS isolado — não precisa criar nenhum arquivo de preview à parte, ele é gerado automaticamente.
+7. **Rode `npm run generate:composition-imports`.** Esse comando varre onde a tag foi usada (na `index.html` ou dentro de outro componente) e adiciona o `import` que falta sozinho — em `src/main.js`, ou no `.js` do componente que usou a tag. Não precisa editar `main.js` na mão.
 
-10. **Rode os checks** antes de commitar:
+8. **Veja funcionando** — rode `npm run dev`. O navegador abre sozinho numa página listando todos os componentes (agrupados por Atoms/Molecules/Organisms); o `positivus-button` já aparece lá assim que o `.html` existir. Clique nele pra ver o preview do HTML/CSS isolado — não precisa criar nenhum arquivo de preview à parte, ele é gerado automaticamente. A `index.html` real (fora do `/__components`) também já mostra o componente funcionando com os props passados no passo 6.
+
+9. **Rode os checks** antes de commitar:
+
+   ```bash
+   npm run lint
+   npm run test
+   npm run format
+   ```
+
+10. **Commit**, seguindo [Conventional Commits](https://www.conventionalcommits.org/) (os passos 4 e 7 já criaram commits próprios sozinhos — falta só commitar o que você escreveu na mão):
 
     ```bash
-    npm run lint
-    npm run test
-    npm run format
-    ```
-
-11. **Commit**, seguindo [Conventional Commits](https://www.conventionalcommits.org/):
-
-    ```bash
-    git add src/components/atoms/positivus-button src/main.js
+    git add src/components/atoms/positivus-button index.html
     git commit -m "feat(atoms): adiciona positivus-button"
     ```
 
+## Passo a passo: parametrizando um componente com props
+
+Qualquer componente pode receber texto/atributo customizado via atributo HTML, sem escrever nenhum JavaScript — quem cria o componente só marca no `.html` (ver passo 2 acima); quem usa passa o valor na tag. Convenção completa, com todos os casos (imagem, link, atributo booleano), em [`src/components/component-props.md`](./src/components/component-props.md). Resumo rápido:
+
+```html
+<!-- no .html do componente -->
+<h2 data-prop="title">Título padrão</h2>
+<img data-prop-src="image" data-prop-alt="image-alt" src="..." alt="..." />
+<button data-prop-toggle-disabled="is-disabled">Enviar</button>
+```
+
+```html
+<!-- usando o componente -->
+<positivus-x title="Outro título" image="./assets/molecules/positivus-x/foto.png" is-disabled="true">
+</positivus-x>
+```
+
+- `data-prop="nome"` → vira o texto do elemento.
+- `data-prop-<atributo>="nome"` → vira aquele atributo do elemento (`src`, `href`, `alt`, `aria-label`, etc.).
+- `data-prop-toggle-<atributo>="nome"` → variante pra atributo booleano (`disabled`, `checked`...).
+- Nome do prop sempre em **kebab-case** (`is-disabled`, não `isDisabled`) — atributo HTML é case-insensitive.
+
+## Passo a passo: usando um componente dentro de outro (composição)
+
+Não tem sintaxe nova — escreva a tag normalmente dentro do `.html` de outro componente (ou da `index.html`), passando prop se quiser, e depois rode `npm run generate:composition-imports` (ver passo 7 acima). Exemplo de verdade já no projeto: [`positivus-card-list`](./src/components/organisms/positivus-card-list), que usa `positivus-example-card` três vezes dentro do próprio `.html`.
+
 ## Passo a passo: adicionando uma imagem a um componente
 
-Imagens usadas só por um componente ficam dentro da própria pasta dele, em `images/`. Exemplo de verdade já no projeto: [positivus-example-card](./src/components/molecules/positivus-example-card).
+Imagens ficam em `public/assets/<nível>/positivus-<nome>/<arquivo>` — mesma estrutura de nível/nome de `src/components/`. Exemplo de verdade já no projeto: [`public/assets/molecules/positivus-example-card`](./public/assets/molecules/positivus-example-card).
 
-1. **Coloque o arquivo** em `positivus-<nome>/images/<arquivo>` (ex: `positivus-example-card/images/example.svg`).
+1. **Coloque o arquivo** em `public/assets/<nível>/positivus-<nome>/<arquivo>` (ex: `public/assets/molecules/positivus-example-card/example.svg`).
 
-2. **Use `<img>` normal no `.html`** — sem sintaxe especial:
+2. **Use `<img>` normal no `.html`**, com caminho relativo — sem `import`, sem rodar nenhum script:
 
    ```html
-   <img src="./images/example.svg" alt="Descrição da imagem" />
+   <img src="./assets/molecules/positivus-example-card/example.svg" alt="Descrição da imagem" />
    ```
 
-3. **Rode `npm run generate:image-imports`.** Esse comando lê os `<img src="...">` locais do `.html` e adiciona/atualiza o `import` da imagem no `.js` do componente sozinho — um `src` relativo simples não funciona sozinho aqui (o motivo está detalhado em [CLAUDE.md](./CLAUDE.md#geração-automática-de-imports-de-imagem)). O comando já commita o `.js` alterado; o `.html`/`.css`/`images/` continuam sendo commitados por quem os criou.
+   Isso já funciona sozinho, em dev e depois do `npm run build` — `public/` é copiado por inteiro pro `dist/`, no mesmo caminho (ver [CLAUDE.md](./CLAUDE.md#imagens-em-publicassets) pro porquê).
 
-4. **Veja funcionando** — tanto no preview de dev (`/__components/<nível>/<nome>`) quanto em `npm run build` + `npm run preview`, já que a imagem passa a ser resolvida como um asset real do Vite nos dois ambientes.
+3. **Se quiser deixar a imagem parametrizável** (trocável por quem usa o componente), marque com `data-prop-src`/`data-prop-alt` (ver "Passo a passo: parametrizando um componente com props" acima) — o valor passado via atributo já é o caminho final, sem processamento extra.
+
+4. **Veja funcionando** — tanto no preview de dev (`/__components/<nível>/<nome>`) quanto em `npm run build` + `npm run preview`.
 
 Detalhes de cada regra (nomenclatura, BEM, Atomic Design, commits/branches, deploy, etc.) estão documentados em [CLAUDE.md](./CLAUDE.md).

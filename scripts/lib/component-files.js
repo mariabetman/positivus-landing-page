@@ -63,8 +63,10 @@ export function toClassName(name) {
 const EXTERNAL_URL_PATTERN = /^([a-z]+:)?\/\//i;
 
 /**
- * Um `src` de `<img>` conta como asset local (candidato a import do Vite)
- * quando não é http(s)/protocol-relative, `data:` nem um caminho absoluto.
+ * Um `href`/`src` conta como referência local (candidata a reescrita de
+ * caminho) quando não é http(s)/protocol-relative, `data:` nem um caminho
+ * absoluto — usado hoje só pro `<head>` real (favicon, etc.) no preview de
+ * dev, ver `readIndexHeadHtml` em `positivus-dev-component-index.js`.
  */
 export function isLocalImageSrc(src) {
   return !(
@@ -74,28 +76,67 @@ export function isLocalImageSrc(src) {
   );
 }
 
+const NESTED_COMPONENT_TAG_PATTERN = /<(positivus-[a-z0-9-]+)\b/gi;
+
+/**
+ * Acha tags `positivus-*` usadas dentro de um HTML (exceto a própria tag do
+ * componente, `ownName`) — usado pra detectar composição (componente usado
+ * dentro de outro) tanto no script de imports quanto no preview de dev.
+ */
+export function extractNestedComponentTags(htmlContent, ownName) {
+  const tags = new Set();
+
+  for (const match of htmlContent.matchAll(NESTED_COMPONENT_TAG_PATTERN)) {
+    const tag = match[1].toLowerCase();
+    if (tag !== ownName) tags.add(tag);
+  }
+
+  return [...tags];
+}
+
+export function findComponentByTagName(components, tagName) {
+  return components.find((component) => component.name === tagName);
+}
+
+/**
+ * Insere linhas de `import` novas logo depois do último `import` já
+ * existente no conteúdo de um `.js` — usado tanto pra imports de imagem
+ * quanto pra imports de composição (side-effect import de um componente
+ * aninhado), sempre da mesma forma.
+ */
+export function insertImportLines(jsContent, importLines) {
+  if (importLines.length === 0) return jsContent;
+
+  const importRegex = /^import .*;$/gm;
+  let lastImportEnd = 0;
+  let match;
+  while ((match = importRegex.exec(jsContent)) !== null) {
+    lastImportEnd = match.index + match[0].length;
+  }
+
+  const insertion = '\n' + importLines.join('\n');
+  return (
+    jsContent.slice(0, lastImportEnd) +
+    insertion +
+    jsContent.slice(lastImportEnd)
+  );
+}
+
 /**
  * @param {string} name
  * @param {string} className
- * @param {{ varName: string, src: string }[]} images
  */
-export function jsTemplate(name, className, images = []) {
-  const importLines = images.map(
-    ({ varName, src }) => `import ${varName} from '${src}';`,
-  );
-  const wiringLines = images.map(
-    ({ varName, src }) =>
-      `    this.$$('img[src="${src}"]').forEach((img) => {\n      img.src = ${varName};\n    });`,
-  );
-
+export function jsTemplate(name, className) {
   return `import { BaseComponent } from '../../base-component.js';
 import template from './${name}.html?raw';
 import styles from './${name}.css?inline';
-${importLines.length ? importLines.join('\n') + '\n' : ''}
+
 export class ${className} extends BaseComponent {
+  static observedAttributes = BaseComponent.extractPropNames(template);
+
   constructor() {
     super({ template, styles });
-${wiringLines.length ? wiringLines.join('\n') + '\n' : ''}  }
+  }
 }
 
 customElements.define('${name}', ${className});

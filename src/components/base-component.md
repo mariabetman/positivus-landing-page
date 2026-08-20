@@ -29,4 +29,42 @@ customElements.define('positivus-example-card', PositivusExampleCard);
 
 Atalhos para `this.shadowRoot.querySelector`/`querySelectorAll` — evitam repetir `this.shadowRoot.` toda vez que uma classe filha precisa achar um elemento dentro do seu próprio markup.
 
+## `data-prop`, `static extractPropNames` e `attributeChangedCallback`
+
+`BaseComponent` também é responsável por deixar um componente receber conteúdo customizado via atributo (prop), sem nenhum JS por componente. A regra é uma só, e vale pra qualquer atributo HTML de qualquer elemento:
+
+- `data-prop="nome"` (sem sufixo) → aplica o valor em `textContent` do elemento.
+- `data-prop-<atributo>="nome"` (com sufixo) → aplica o valor via `setAttribute('<atributo>', valor)` — funciona pra `src`, `alt`, `href`, `aria-label`, ou qualquer outro atributo padrão de HTML, sem o `BaseComponent` precisar conhecer o tipo do elemento.
+- `data-prop-toggle-<atributo>="nome"` → variante pra atributo **booleano** (`disabled`, `checked`, `required`, `hidden`...): aplica via `toggleAttribute('<atributo>', valor === 'true')`, decidindo se o atributo existe ou não — diferente do `data-prop-<atributo>` normal, que só seta o valor (e não resolveria booleano certo, ver "Limitações conhecidas" abaixo).
+
+```html
+<img class="card__image" src="..." data-prop-src="image" data-prop-alt="image-alt" />
+<a class="card__link" href="#" data-prop-href="link">Saiba mais</a>
+<h2 class="card__title" data-prop="title">Example Card</h2>
+<button class="card__button" data-prop-toggle-disabled="is-disabled">Enviar</button>
+```
+
+**Nome do prop sempre em kebab-case** (ex: `is-disabled`, não `isDisabled`): o valor de `data-prop`/`data-prop-<atributo>`/`data-prop-toggle-<atributo>` se torna o nome de um atributo HTML real (`<positivus-x is-disabled="true">`), e atributos HTML são *case-insensitive* — `element.setAttribute('isDisabled', ...)` vira `isdisabled` (tudo minúsculo) na hora, então um prop com letra maiúscula no nome nunca bateria com o que `static observedAttributes` espera, e o `attributeChangedCallback` nunca dispararia pra ele.
+
+```js
+export class PositivusExampleCard extends BaseComponent {
+  static observedAttributes = BaseComponent.extractPropNames(template);
+
+  constructor() {
+    super({ template, styles });
+  }
+}
+```
+
+- `BaseComponent.extractPropNames(template)`: lê os nomes de `data-prop`/`data-prop-<atributo>` presentes na string do template. Usado pra declarar `static observedAttributes` — obrigatório pro navegador saber quais atributos observar e disparar `attributeChangedCallback`. Todo componente gerado por `npm run generate:component` já sai com essa linha.
+- No `constructor`, depois de montar o `shadowRoot.innerHTML`, o `BaseComponent` varre todo elemento do Shadow DOM procurando atributos que comecem com `data-prop` e guarda um mapa nome do prop → `{ elemento, alvo }` (`alvo` é `'text'` pro `data-prop` sem sufixo, ou o nome do atributo pro `data-prop-<atributo>`).
+- `attributeChangedCallback(name)` aplica o valor no elemento mapeado — chamado automaticamente pelo navegador, tanto pro valor inicial (se o atributo já vier preenchido no HTML) quanto pra mudanças depois.
+- Um mesmo elemento pode ter vários props ao mesmo tempo, cada um com seu próprio nome (ex: `data-prop-src="image"` + `data-prop-alt="image-alt"` no mesmo `<img>`) — não tem limite de quantos atributos diferentes um elemento aceita.
+
+**Limitações conhecidas** (nenhuma bloqueia o uso atual do projeto, mas vale saber):
+- **Conteúdo rico ou outro componente como "valor"** (não uma string) não é coberto por `data-prop` — um atributo HTML só carrega texto. Pra isso, a única forma seria slot (mecanismo descartado neste projeto, ver `component-props.md`).
+- **Reatividade de formulário** (`value`/`checked` de `<input>`, que representam o estado *atual*, não só o padrão) tende a exigir a propriedade do DOM em vez de `setAttribute` — não é um caso usado no projeto ainda. Também não existe hoje nenhuma forma de levar dado de dentro do componente pra fora (ex: o que o usuário digitou) — isso exigiria eventos customizados (`dispatchEvent`), um mecanismo diferente do `data-prop` (que só leva dado de fora pra dentro).
+
+Veja [`component-props.md`](./component-props.md) pra convenção completa de props/composição.
+
 Veja a convenção completa de componentes (estrutura de pastas, nomenclatura, etc.) no [CLAUDE.md](../../CLAUDE.md) na raiz do projeto.
