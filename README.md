@@ -95,7 +95,7 @@ src/
 public/
   favicon.svg
   assets/
-    <nível>/<nome-do-componente>/  # imagens usadas por cada componente (ver seção de imagens abaixo)
+    <funcao>/  # logos/, icons/, illustrations/, bgs/... (ver seção de imagens abaixo)
 ```
 
 ## Passo a passo: criando um componente novo
@@ -182,7 +182,7 @@ Qualquer componente pode receber texto/atributo customizado via atributo HTML, s
 
 ```html
 <!-- usando o componente -->
-<positivus-x title="Outro título" image="./assets/molecules/positivus-x/foto.png" is-disabled="true">
+<positivus-x title="Outro título" image="./assets/icons/seta-direita.svg" is-disabled="true">
 </positivus-x>
 ```
 
@@ -197,14 +197,14 @@ Não tem sintaxe nova — escreva a tag normalmente dentro do `.html` de outro c
 
 ## Passo a passo: adicionando uma imagem a um componente
 
-Imagens ficam em `public/assets/<nível>/positivus-<nome>/<arquivo>` — mesma estrutura de nível/nome de `src/components/`. Exemplo de verdade já no projeto: [`public/assets/molecules/positivus-example-card`](./public/assets/molecules/positivus-example-card).
+Imagens ficam em `public/assets/<funcao>/<arquivo>` — organizadas pelo que a imagem **é** (`logos/`, `icons/`, `illustrations/`, `bgs/`...), não por qual componente usa — assim a mesma imagem pode ser reaproveitada por mais de um componente sem duplicar arquivo. Estrutura plana dentro de cada pasta de função (sem subpasta por componente), então o nome do arquivo precisa ser único ali dentro. Exemplos de verdade já no projeto: [`public/assets/logos`](./public/assets/logos) e [`public/assets/illustrations`](./public/assets/illustrations).
 
-1. **Coloque o arquivo** em `public/assets/<nível>/positivus-<nome>/<arquivo>` (ex: `public/assets/molecules/positivus-example-card/example.svg`).
+1. **Coloque o arquivo** em `public/assets/<funcao>/<arquivo>` (ex: `public/assets/icons/seta-direita.svg`) — use uma pasta de função já existente, ou crie uma nova só se nenhuma existente descrever a imagem.
 
 2. **Use `<img>` normal no `.html`**, com caminho relativo — sem `import`, sem rodar nenhum script:
 
    ```html
-   <img src="./assets/molecules/positivus-example-card/example.svg" alt="Descrição da imagem" />
+   <img src="./assets/icons/seta-direita.svg" alt="Descrição da imagem" />
    ```
 
    Isso já funciona sozinho, em dev e depois do `npm run build` — `public/` é copiado por inteiro pro `dist/`, no mesmo caminho (ver [CLAUDE.md](./CLAUDE.md#imagens-em-publicassets) pro porquê).

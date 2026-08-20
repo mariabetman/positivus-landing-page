@@ -62,8 +62,7 @@ src/
 public/
   favicon.svg
   assets/
-    <nivel>/
-      <nome-do-componente>/  # imagens usadas por esse componente (ver "Imagens em public/assets" abaixo)
+    <funcao>/  # ex: logos/, icons/, illustrations/, bgs/ — ver "Imagens em public/assets" abaixo
 ```
 
 Ainda não existem pastas `templates/` (layout de página combinando organisms) nem `pages/` (instância de uma página) — o projeto é uma landing page de página única. Criar essas pastas apenas quando houver necessidade real (ex: o site virar multi-página ou surgir mais de um layout).
@@ -122,14 +121,14 @@ Regras:
 - O HTML do componente fica em um arquivo `.html` separado, importado no `.js` via `?raw` (Vite) — não usar template literal inline para markup.
 - Estilos ficam encapsulados no Shadow DOM via `adoptedStyleSheets` (import `?inline` do CSS) — evita vazamento de estilo entre componentes.
 - Não introduzir frameworks/bibliotecas de componentes (React, Lit, etc.) — a arquitetura é Web Components nativos por decisão do projeto.
-- Imagens usadas por um componente ficam em `public/assets/<nivel>/positivus-<nome>/`, referenciadas no `.html` com caminho relativo (`<img src="./assets/<nivel>/positivus-<nome>/<arquivo>">`) — ver "Imagens em public/assets" abaixo.
+- Imagens usadas por um componente ficam em `public/assets/<funcao>/`, referenciadas no `.html` com caminho relativo (`<img src="./assets/<funcao>/<arquivo>">`) — ver "Imagens em public/assets" abaixo.
 
 ## Props e composição de componentes
 
 Todo componente pode receber conteúdo customizado via atributo (prop) e usar a tag de outro componente já existente dentro do próprio `.html` — sem escrever JavaScript pra isso. Convenção completa, com exemplos, em [`src/components/component-props.md`](src/components/component-props.md). Resumo:
 
 - **Prop de texto ou de qualquer atributo**: marque o elemento com `data-prop="nome"` (sem sufixo → vira `textContent`), `data-prop-<atributo>="nome"` (com sufixo → vira aquele atributo via `setAttribute`, funciona pra `src`, `alt`, `href`, `aria-label`, etc.) ou `data-prop-toggle-<atributo>="nome"` (atributo booleano — `disabled`, `checked`... — via `toggleAttribute`, interpretando o valor como `"true"`/`"false"`) no `.html` do componente; quem usa passa `<positivus-x nome="valor">`. Nome do prop sempre em kebab-case (atributo HTML é case-insensitive). O `BaseComponent` resolve isso sozinho (ver `src/components/base-component.md`) — nenhum componente escreve esse JS à mão.
-- **Imagem como prop**: como imagens moram em `public/assets/` (ver "Imagens em public/assets" abaixo), o valor do atributo já é o caminho final — sem `import`, sem script, sem cuidado extra. Ex: `<positivus-x image="./assets/molecules/positivus-x/outra-imagem.png">`.
+- **Imagem como prop**: como imagens moram em `public/assets/` (ver "Imagens em public/assets" abaixo), o valor do atributo já é o caminho final — sem `import`, sem script, sem cuidado extra. Ex: `<positivus-x icon="./assets/icons/seta.svg">`.
 - **Composição** (tag de um componente dentro do `.html` de outro, ou direto na `index.html`): escreva a tag normalmente, depois rode `npm run generate:composition-imports` (ver "Geração automática de imports de composição" abaixo) pra garantir que o `.js` daquele componente seja carregado.
 - **Variação visual** (ex: `variant="secondary"`, não é texto/imagem): atributo simples + `:host([variant="secondary"])` no CSS do próprio componente — não usa `data-prop`.
 
@@ -145,6 +144,7 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
 - Se o `.html` do componente usa a tag de outro componente aninhado (composição), o preview injeta um `<script type="module">` carregando o `.js` de cada tag aninhada encontrada — sem isso, a tag apareceria "crua" (sem upgrade do Custom Element), já que este preview monta o Shadow DOM na mão, sem passar pelo `.js` do próprio componente sendo visualizado.
+- A página de preview também injeta `<base href="...">` no `<head>` — necessário porque essa rota vive níveis abaixo da raiz do site (`/__components/<nivel>/<nome>`); sem o `<base>`, um caminho relativo de imagem (`./assets/<funcao>/<arquivo>`, ver "Imagens em public/assets" abaixo) resolveria contra a URL do preview em vez da raiz, e quebraria — tanto pro componente sendo visualizado quanto pra um componente aninhado real dentro dele (que carrega seu `.html` original, sem nenhuma reescrita deste plugin).
 
 ## Geração automática de arquivos de componente
 
@@ -159,12 +159,13 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 
 ## Imagens em `public/assets`
 
-Imagens usadas por componentes ficam em `public/assets/<nivel>/positivus-<nome>/<arquivo>` — mesma estrutura de nível/nome de `src/components/`, pra evitar nome repetido entre componentes diferentes (ex: dois "icon.png" de componentes distintos) e deixar fácil achar de qual componente uma imagem veio. `public/` é copiado por inteiro pro `dist/` sem passar pelo pipeline de bundling do Vite (sem hash, sem otimização) — arquivos ali são servidos com o caminho exatamente como estão no disco.
+Imagens ficam em `public/assets/<funcao>/<arquivo>` — organizadas por **função** (o que a imagem é), não por componente/nível: `logos/`, `icons/`, `illustrations/`, `bgs/` (background), etc. — crie uma pasta de função nova só quando surgir uma categoria real, não de antemão. Isso é proposital: como a mesma imagem pode ser usada por mais de um componente (ex: um ícone usado em dois cards diferentes), organizar por componente obrigaria duplicar o arquivo ou escolher um "dono" arbitrário. `public/` é copiado por inteiro pro `dist/` sem passar pelo pipeline de bundling do Vite (sem hash, sem otimização) — arquivos ali são servidos com o caminho exatamente como estão no disco.
 
-- Referencie a imagem no `.html` do componente com caminho relativo, ex: `<img src="./assets/<nivel>/positivus-<nome>/<arquivo>">`. Isso funciona sozinho, sem `import`, sem script, tanto em dev quanto depois do `npm run build` — o relativo resolve contra a URL da página (sempre a raiz do site, já que é uma SPA de página única), igual já acontece com `public/favicon.svg` referenciado no `index.html` (ver seção "Deploy" abaixo).
+- Referencie a imagem no `.html` do componente com caminho relativo, ex: `<img src="./assets/logos/amazon-logo.png">`. Isso funciona sozinho, sem `import`, sem script, tanto em dev quanto depois do `npm run build` — o relativo resolve contra a URL da página (sempre a raiz do site, já que é uma SPA de página única), igual já acontece com `public/favicon.svg` referenciado no `index.html` (ver seção "Deploy" abaixo).
+- Estrutura **plana** dentro de cada pasta de função (sem subpasta por componente) — o nome do arquivo precisa ser único dentro da própria pasta de função (ex: não pode ter dois `icon.svg` dentro de `icons/`; nomeie de forma descritiva, `seta-direita.svg`, não `icon.svg`).
 - **Não** existe mais um `npm run generate:image-imports`/pasta `positivus-<nome>/images/` — essa era a convenção antiga (imagem colocada ao lado do componente, resolvida via `import` do Vite) e foi substituída por `public/assets/` justamente pra eliminar a necessidade desse `import`/script.
 - Mesma regra vale pra imagem passada como prop (ver "Props e composição de componentes" acima): o valor do atributo já é o caminho final relativo a `public/assets/`, funciona igual em qualquer lugar (`index.html`, `.html` de outro componente, valor de atributo) sem processamento nenhum.
-- O preview de dev (`/__components/<nivel>/<nome>`) reescreve esse caminho relativo pra absoluto sozinho (ver `resolvePublicAssetSrcs` em `positivus-dev-component-index.js`) — não precisa de nada manual só pra visualizar.
+- O preview de dev (`/__components/<nivel>/<nome>`) resolve esse caminho relativo sozinho via `<base href="...">` injetado na própria página de preview (ver "Preview automático de componentes" abaixo) — não precisa de nada manual só pra visualizar.
 - Não reconhece imagem referenciada via CSS (`background-image: url(...)`) porque não precisa — `url()` dentro do `.css` do componente já é resolvido corretamente pelo Vite (o CSS passa pelo pipeline de assets antes de virar string `?inline`), diferente do `.html`; usar `public/assets/...` direto no `url()` também funciona, sem mistério.
 
 ## Geração automática de imports de composição

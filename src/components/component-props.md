@@ -18,7 +18,7 @@ só, e cobre qualquer atributo de qualquer elemento:
 <div class="card">
   <img
     class="card__image"
-    src="./assets/molecules/positivus-example-card/example.svg"
+    src="./assets/illustrations/example.svg"
     alt="Ilustração do card de exemplo"
     data-prop-src="image"
     data-prop-alt="image-alt"
@@ -120,13 +120,14 @@ padrão original — numa landing page estática isso não costuma importar.
 Diferente de texto, uma imagem *local* costumava exigir um `import` do Vite
 pra funcionar depois do `npm run build` — mas isso só era necessário porque
 a imagem ficava colocada do lado do componente (`positivus-<nome>/images/`).
-Hoje as imagens ficam em `public/assets/<nivel>/positivus-<nome>/<arquivo>`
-(ver "Imagens em `public/assets`" no [`CLAUDE.md`](../../CLAUDE.md)), que o
-Vite copia como está pro `dist/`, com caminho estável — então o valor de um
-prop de imagem já é o caminho final, sem nenhum processamento:
+Hoje as imagens ficam em `public/assets/<funcao>/<arquivo>` (organizadas por
+função — `icons/`, `logos/`, `illustrations/`, etc. — ver "Imagens em
+`public/assets`" no [`CLAUDE.md`](../../CLAUDE.md)), que o Vite copia como
+está pro `dist/`, com caminho estável — então o valor de um prop de imagem
+já é o caminho final, sem nenhum processamento:
 
 ```html
-<positivus-card icon="./assets/molecules/positivus-card/icone-alternativo.png">
+<positivus-card icon="./assets/icons/seta-direita.svg">
 </positivus-card>
 ```
 
