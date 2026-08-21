@@ -27,7 +27,7 @@ npm run test:watch       # testes unitários em modo watch
 npm run e2e              # testes e2e (Cypress), sobe o dev server sozinho
 npm run cypress:open     # abre o Cypress interativo (precisa do `npm run dev` já rodando)
 npm run generate:component     # gera .js/.stories.js/.test.js de componentes novos
-npm run generate:image-imports # gera o import das imagens locais de componentes no .js
+npm run generate:composition-imports # gera o import de componentes usados dentro de outro (ou na index.html)
 ```
 
 ## Estrutura de pastas
@@ -53,7 +53,6 @@ src/
         <nome-do-componente>.css
         <nome-do-componente>.stories.js
         <nome-do-componente>.test.js
-        images/                  # opcional: imagens usadas só por este componente
     molecules/               # combinação de poucos atoms com uma única responsabilidade (ex: card, form-group)
       <nome-do-componente>/
         ...
@@ -62,6 +61,8 @@ src/
         ...
 public/
   favicon.svg
+  assets/
+    <funcao>/  # ex: logos/, icons/, illustrations/, bgs/ — ver "Imagens em public/assets" abaixo
 ```
 
 Ainda não existem pastas `templates/` (layout de página combinando organisms) nem `pages/` (instância de uma página) — o projeto é uma landing page de página única. Criar essas pastas apenas quando houver necessidade real (ex: o site virar multi-página ou surgir mais de um layout).
@@ -87,6 +88,8 @@ Cada componente é isolado em sua própria pasta dentro do nível correto (`atom
    import styles from './positivus-<nome>.css?inline';
 
    export class PositivusNomeDoComponente extends BaseComponent {
+     static observedAttributes = BaseComponent.extractPropNames(template);
+
      constructor() {
        super({ template, styles });
      }
@@ -102,9 +105,11 @@ Cada componente é isolado em sua própria pasta dentro do nível correto (`atom
 6. Importe o arquivo `.js` do componente em `src/main.js`.
 7. Use a tag customizada diretamente no `index.html` (ex: `<positivus-example-card></positivus-example-card>`).
 
+Se o componente precisa aceitar texto/imagem customizados (prop) ou usar a tag de outro componente já existente dentro do próprio `.html`, ver ["Props e composição de componentes"](#props-e-composição-de-componentes) abaixo.
+
 Não é preciso criar nenhum arquivo de preview manualmente — rodando `npm run dev`, o preview do HTML/CSS do componente é gerado automaticamente (ver "Preview automático de componentes" abaixo).
 
-Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: depois de criar o `.html`/`.css`, rode `npm run generate:component` (ver "Geração automática de arquivos de componente" abaixo) pra gerar os 3 arquivos automaticamente, caso ainda não existam. Continuam manuais só os passos 1–2 (html/css) e 6–7 (importar em `src/main.js` e usar a tag no `index.html`).
+Os passos 3–5 (`.js`, `.stories.js`, `.test.js`) também não precisam ser criados manualmente: depois de criar o `.html`/`.css`, rode `npm run generate:component` (ver "Geração automática de arquivos de componente" abaixo) pra gerar os 3 arquivos automaticamente, caso ainda não existam. Continuam manuais só os passos 1–2 (html/css) — o passo 6/7 (importar em `src/main.js`/usar a tag no `index.html`) fica automático quando a tag já está em uso em outro `.html` ou na `index.html`, rodando `npm run generate:composition-imports`.
 
 Regras:
 
@@ -116,7 +121,16 @@ Regras:
 - O HTML do componente fica em um arquivo `.html` separado, importado no `.js` via `?raw` (Vite) — não usar template literal inline para markup.
 - Estilos ficam encapsulados no Shadow DOM via `adoptedStyleSheets` (import `?inline` do CSS) — evita vazamento de estilo entre componentes.
 - Não introduzir frameworks/bibliotecas de componentes (React, Lit, etc.) — a arquitetura é Web Components nativos por decisão do projeto.
-- Imagens usadas só por um componente ficam em `positivus-<nome>/images/`, referenciadas no `.html` com `<img src="./images/<arquivo>">` normal, como em qualquer HTML — não precisa de nenhuma sintaxe especial. Rodar `npm run generate:image-imports` depois (ver "Geração automática de imports de imagem" abaixo) resolve o resto; ver essa seção pra entender por que um `src` relativo simples não funciona sozinho.
+- Imagens usadas por um componente ficam em `public/assets/<funcao>/`, referenciadas no `.html` com caminho relativo (`<img src="./assets/<funcao>/<arquivo>">`) — ver "Imagens em public/assets" abaixo.
+
+## Props e composição de componentes
+
+Todo componente pode receber conteúdo customizado via atributo (prop) e usar a tag de outro componente já existente dentro do próprio `.html` — sem escrever JavaScript pra isso. Convenção completa, com exemplos, em [`src/components/component-props.md`](src/components/component-props.md). Resumo:
+
+- **Prop de texto ou de qualquer atributo**: marque o elemento com `data-prop="nome"` (sem sufixo → vira `textContent`), `data-prop-<atributo>="nome"` (com sufixo → vira aquele atributo via `setAttribute`, funciona pra `src`, `alt`, `href`, `aria-label`, etc.) ou `data-prop-toggle-<atributo>="nome"` (atributo booleano — `disabled`, `checked`... — via `toggleAttribute`, interpretando o valor como `"true"`/`"false"`) no `.html` do componente; quem usa passa `<positivus-x nome="valor">`. Nome do prop sempre em kebab-case (atributo HTML é case-insensitive). O `BaseComponent` resolve isso sozinho (ver `src/components/base-component.md`) — nenhum componente escreve esse JS à mão.
+- **Imagem como prop**: como imagens moram em `public/assets/` (ver "Imagens em public/assets" abaixo), o valor do atributo já é o caminho final — sem `import`, sem script, sem cuidado extra. Ex: `<positivus-x icon="./assets/icons/seta.svg">`.
+- **Composição** (tag de um componente dentro do `.html` de outro, ou direto na `index.html`): escreva a tag normalmente, depois rode `npm run generate:composition-imports` (ver "Geração automática de imports de composição" abaixo) pra garantir que o `.js` daquele componente seja carregado.
+- **Variação visual** (ex: `variant="secondary"`, não é texto/imagem): atributo simples + `:host([variant="secondary"])` no CSS do próprio componente — não usa `data-prop`.
 
 ## Preview automático de componentes (modo dev)
 
@@ -129,6 +143,8 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - O `<head>` das duas páginas acima (fora do Shadow DOM) é lido direto do `<head>` do `index.html` real — viewport, favicon, título (sobrescrito pelo da própria página de dev), links de CSS globais e fonts. Qualquer coisa nova adicionada ao `<head>` do site (uma meta tag, um novo CSS global, etc.) aparece nas páginas de dev sozinha, sem editar o plugin. Um `href`/`src` relativo do jeito que está no `index.html` (ex: `./favicon.svg`) só funciona lá porque o `index.html` mora na raiz do site; como as rotas de preview podem estar níveis abaixo de `/__components`, o plugin reescreve esses caminhos relativos pra absolutos antes de devolver o HTML pra `server.transformIndexHtml` (que resolve o `base`, injeta o client do HMR, etc. — o mesmo pipeline que o Vite usa pro `index.html` de verdade). Já o CSS injetado dentro do Shadow DOM simulado do preview (`reset.css` + `typograph.css` + `global.css`) é fixo, espelhando exatamente o que `src/components/base-component.js` adota de verdade — se um dia o `BaseComponent` passar a adotar mais um arquivo, atualizar os dois lugares juntos. Como o plugin lê `reset.css` cru do disco (sem passar pelo pipeline de CSS do Vite), o `@import 'eric-meyer-reset/...'` daquele arquivo não resolve sozinho dentro do `<style>` da página de preview — o plugin trata esse caso à parte (ver `readResetCss` em `positivus-dev-component-index.js`), injetando o CSS real do pacote e removendo a linha de `@import` do restante do arquivo.
 - Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
+- Se o `.html` do componente usa a tag de outro componente aninhado (composição), o preview injeta um `<script type="module">` carregando o `.js` de cada tag aninhada encontrada — sem isso, a tag apareceria "crua" (sem upgrade do Custom Element), já que este preview monta o Shadow DOM na mão, sem passar pelo `.js` do próprio componente sendo visualizado.
+- A página de preview também injeta `<base href="...">` no `<head>` — necessário porque essa rota vive níveis abaixo da raiz do site (`/__components/<nivel>/<nome>`); sem o `<base>`, um caminho relativo de imagem (`./assets/<funcao>/<arquivo>`, ver "Imagens em public/assets" abaixo) resolveria contra a URL do preview em vez da raiz, e quebraria — tanto pro componente sendo visualizado quanto pra um componente aninhado real dentro dele (que carrega seu `.html` original, sem nenhuma reescrita deste plugin).
 
 ## Geração automática de arquivos de componente
 
@@ -141,18 +157,27 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
 
-## Geração automática de imports de imagem
+## Imagens em `public/assets`
 
-O `<img src="./images/foo.png">` dentro do `.html` de um componente não funciona sozinho: o template é injetado no Shadow DOM via `this.shadowRoot.innerHTML = template` (ver `src/components/base-component.js`), e nesse momento o navegador resolve caminhos relativos contra o documento atual (a página carregada), não contra o arquivo de origem do componente — a imagem nunca é encontrada, nem em dev nem em build. A única forma seguro nos dois ambientes é um `import` estático de módulo no `.js` (assim o Vite conhece o asset em tempo de build e resolve/hasheia o caminho corretamente); resolver isso em runtime funcionaria só em dev, não no build de produção.
+Imagens ficam em `public/assets/<funcao>/<arquivo>` — organizadas por **função** (o que a imagem é), não por componente/nível: `logos/`, `icons/`, `illustrations/`, `bgs/` (background), etc. — crie uma pasta de função nova só quando surgir uma categoria real, não de antemão. Isso é proposital: como a mesma imagem pode ser usada por mais de um componente (ex: um ícone usado em dois cards diferentes), organizar por componente obrigaria duplicar o arquivo ou escolher um "dono" arbitrário. `public/` é copiado por inteiro pro `dist/` sem passar pelo pipeline de bundling do Vite (sem hash, sem otimização) — arquivos ali são servidos com o caminho exatamente como estão no disco.
 
-`npm run generate:image-imports` (roda `scripts/generate-component-image-imports.js`) automatiza esse `import`, pra quem cria o componente nunca precisar escrever esse JS na mão — só o `<img src="./images/...">` normal no `.html`. É um comando manual e independente do `npm run generate:component` (nenhum dos dois chama o outro):
+- Referencie a imagem no `.html` do componente com caminho relativo, ex: `<img src="./assets/logos/amazon-logo.png">`. Isso funciona sozinho, sem `import`, sem script, tanto em dev quanto depois do `npm run build` — o relativo resolve contra a URL da página (sempre a raiz do site, já que é uma SPA de página única), igual já acontece com `public/favicon.svg` referenciado no `index.html` (ver seção "Deploy" abaixo).
+- Estrutura **plana** dentro de cada pasta de função (sem subpasta por componente) — o nome do arquivo precisa ser único dentro da própria pasta de função (ex: não pode ter dois `icon.svg` dentro de `icons/`; nomeie de forma descritiva, `seta-direita.svg`, não `icon.svg`).
+- **Não** existe mais um `npm run generate:image-imports`/pasta `positivus-<nome>/images/` — essa era a convenção antiga (imagem colocada ao lado do componente, resolvida via `import` do Vite) e foi substituída por `public/assets/` justamente pra eliminar a necessidade desse `import`/script.
+- Mesma regra vale pra imagem passada como prop (ver "Props e composição de componentes" acima): o valor do atributo já é o caminho final relativo a `public/assets/`, funciona igual em qualquer lugar (`index.html`, `.html` de outro componente, valor de atributo) sem processamento nenhum.
+- O preview de dev (`/__components/<nivel>/<nome>`) resolve esse caminho relativo sozinho via `<base href="...">` injetado na própria página de preview (ver "Preview automático de componentes" abaixo) — não precisa de nada manual só pra visualizar.
+- Não reconhece imagem referenciada via CSS (`background-image: url(...)`) porque não precisa — `url()` dentro do `.css` do componente já é resolvido corretamente pelo Vite (o CSS passa pelo pipeline de assets antes de virar string `?inline`), diferente do `.html`; usar `public/assets/...` direto no `url()` também funciona, sem mistério.
 
-- Varre os mesmos componentes que `generate-component-files.js` (`.html` com `<img src="...">` local, ignorando URLs externas/`data:`/caminho absoluto).
-- Se o `.js` do componente **ainda não existir**, cria ele já com o `import` e o wiring da imagem (não depende de `npm run generate:component` ter rodado antes).
-- Se o `.js` **já existir** (gerado ou manual) mas faltar o `import` de alguma imagem nova, insere só o que falta — idempotente, roda quantas vezes quiser sem duplicar nada.
-- Pra cada imagem, gera `import img<NomeDoArquivo> from './images/<arquivo>';` e, no `constructor`, `this.$$('img[src="./images/<arquivo>"]').forEach((img) => { img.src = img<NomeDoArquivo>; });`.
-- Mesma regra de commit do `generate-component-files.js`: `git add` só do `.js` alterado e commit próprio (`feat: adiciona import de imagens em positivus-<nome>`, sem escopo).
-- Não reconhece imagem referenciada via CSS (`background-image: url(...)`) porque não precisa — `url()` dentro do `.css` do componente já é resolvido corretamente pelo Vite (o CSS passa pelo pipeline de assets antes de virar string `?inline`), diferente do `.html`.
+## Geração automática de imports de composição
+
+Custom Elements se auto-atualizam onde aparecerem (inclusive dentro de Shadow DOM) assim que o `.js` que os define é carregado em algum lugar da página — usar a tag de um componente já existente dentro do `.html` de outro (ou na `index.html`) não precisa de nenhuma sintaxe especial. Só falta garantir que aquele `.js` seja carregado.
+
+`npm run generate:composition-imports` (roda `scripts/generate-component-composition-imports.js`) automatiza esse `import`. Comando manual, independente dos outros dois:
+
+- Varre os mesmos componentes que os outros scripts, procurando tags `positivus-*` usadas dentro do `.html` (exceto a própria tag do componente) — pra cada uma encontrada, garante `import '../../<nivel>/<nome>/<nome>.js';` no `.js` do componente que a usa (insere só o que falta).
+- Também varre a `index.html`, garantindo o import equivalente em `src/main.js` — automatiza o que seria o passo manual 6 da convenção, sempre que a tag já estiver em uso na `index.html`.
+- Se a tag usada não corresponder a nenhum componente encontrado, avisa e pula (não quebra o script). Se o `.js` do componente que usa a tag ainda não existir, avisa pra rodar `npm run generate:component` antes.
+- Mesma regra de commit dos outros dois scripts: `feat: adiciona import de composição em positivus-<nome>` (ou `feat: adiciona import de composição na index` pro `main.js`), sem escopo.
 
 ## Storybook
 
@@ -175,7 +200,7 @@ export const Default = {
 Regras:
 
 - `title` sempre no formato `<Nível>/<NomeDaClasse>` (ex: `Atoms/PositivusButton`), pra manter a navegação do Storybook alinhada com Atomic Design.
-- Como os componentes são Custom Elements nativos (sem Lit), o `render` de cada story cria e retorna o elemento via `document.createElement('positivus-<nome>')` (ou monta um container com `innerHTML`, se precisar passar atributos/slots).
+- Como os componentes são Custom Elements nativos (sem Lit), o `render` de cada story cria o elemento via `document.createElement('positivus-<nome>')` e, se precisar passar props customizados, usa `el.setAttribute('nome', 'valor')` antes de retornar (ver "Props e composição de componentes" acima).
 - `.storybook/main.js` e `.storybook/preview.js` configuram o Storybook para usar o Vite (`@storybook/web-components-vite`) e carregar `reset.css` + `global.css` globalmente.
 - `storybook-static/` (saída de `npm run build-storybook`) é ignorada no git, assim como `dist/`.
 
@@ -209,7 +234,7 @@ describe('positivus-example-card', () => {
 Regras:
 
 - `describe`/`it`/`expect` sempre importados explicitamente de `'vitest'` (o projeto usa `test.globals: false`, o padrão) — evita depender de globals implícitos e não exige configuração extra no ESLint.
-- Teste cria a instância do componente via `document.createElement('positivus-<nome>')` e verifica o conteúdo do `shadowRoot` — nunca testar detalhes internos do `BaseComponent` (isso já é coberto pelos testes dos componentes que o usam).
+- Teste cria a instância do componente via `document.createElement('positivus-<nome>')` e verifica o conteúdo do `shadowRoot` — nunca testar detalhes internos do `BaseComponent` a partir do teste *de um componente* (isso já é coberto pelos testes dos componentes que o usam). O próprio `BaseComponent` tem um teste dedicado (`src/components/base-component.test.js`), único lugar que testa esses detalhes diretamente (binding de `data-prop`, `attributeChangedCallback`, `extractPropNames`).
 - `include: ['src/**/*.test.js']` em `vite.config.js` — só arquivos dentro de `src/` são considerados testes unitários.
 
 ### E2E (Cypress)
