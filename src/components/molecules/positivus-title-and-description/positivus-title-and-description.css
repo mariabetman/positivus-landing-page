@@ -5,10 +5,7 @@
 .title-and-description {
     display: flex;
     flex-direction: column;
-    padding: 1rem;
     gap: 1.25rem;
-    max-width: var(--desktop-max-width);
-    margin: auto;
 }
 
 .title-and-description__title {
