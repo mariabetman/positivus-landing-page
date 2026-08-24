@@ -3,12 +3,13 @@ import path from 'node:path';
 import {
   COMPONENTS_ROOT,
   findComponents,
+  findComponentByTagName,
+  extractNestedComponentTags,
   isLocalImageSrc,
 } from '../scripts/lib/component-files.js';
 
 const STYLES_ROOT = 'src/styles';
 const INDEX_ROUTE = '/__components';
-const IMG_SRC_ATTRIBUTE_PATTERN = /(<img\b[^>]*\ssrc\s*=\s*["'])([^"']+)(["'])/gi;
 const HEAD_CONTENT_PATTERN = /<head[^>]*>([\s\S]*?)<\/head>/i;
 const TITLE_TAG_PATTERN = /<title>[\s\S]*?<\/title>/i;
 const HREF_OR_SRC_ATTRIBUTE_PATTERN = /((?:href|src)\s*=\s*["'])([^"']+)(["'])/gi;
@@ -98,24 +99,26 @@ function renderIndexHtml(components, base, projectRoot) {
 }
 
 /**
- * No componente real, um `<img src="./images/x.svg">` vira um import do
- * Vite (ver npm run generate:image-imports) que resolve pra a URL de dev do
- * asset. Como este preview injeta o .html cru (sem passar pelo .js nem pelo
- * pipeline de import), reescrevemos aqui os `src` locais pra apontar direto
- * pro arquivo dentro da pasta do componente — senão o navegador resolve o
- * caminho relativo contra a URL do preview (/__components/<nivel>/<nome>),
- * que não existe no disco, e a imagem quebra.
+ * Uma tag `positivus-*` aninhada dentro do `.html` de outro componente só
+ * "funciona" (upgrade do Custom Element) se o `.js` que a define já rodou
+ * na página. Este preview monta o Shadow DOM na mão (sem passar pelo `.js`
+ * do próprio componente sendo visualizado), então precisa carregar à parte
+ * o `.js` de cada componente aninhado encontrado no HTML.
+ *
+ * O `src` é escrito relativo à raiz (`/src/...`), sem o `base` — igual
+ * `readIndexHeadHtml` faz pros outros links do `<head>` — porque este HTML
+ * ainda passa por `server.transformIndexHtml`, que já adiciona o `base`
+ * sozinho; incluir aqui também duplicaria o prefixo.
  */
-function resolveComponentImageSrcs(markup, assetBaseUrl) {
-  return markup.replace(
-    IMG_SRC_ATTRIBUTE_PATTERN,
-    (full, prefix, src, suffix) => {
-      if (!isLocalImageSrc(src)) return full;
-
-      const relativePath = src.replace(/^\.\//, '');
-      return `${prefix}${assetBaseUrl}/${relativePath}${suffix}`;
-    },
-  );
+function buildNestedComponentScripts(markup, name, components) {
+  return extractNestedComponentTags(markup, name)
+    .map((tag) => findComponentByTagName(components, tag))
+    .filter(Boolean)
+    .map(
+      (nested) =>
+        `<script type="module" src="/src/components/${nested.level}/${nested.name}/${nested.name}.js"></script>`,
+    )
+    .join('\n    ');
 }
 
 function readStyle(projectRoot, fileName) {
@@ -145,17 +148,22 @@ function readResetCss(projectRoot) {
 /**
  * Gera a página de preview de um componente na hora, lendo o .html/.css
  * dele direto do disco — não depende de nenhum arquivo .preview.html.
+ *
+ * `<base href="${base}">` no `<head>` é o que faz `./assets/...` (usado nos
+ * `.html` dos componentes, ver "Imagens em public/assets" no CLAUDE.md)
+ * resolver certo aqui: essa rota vive níveis abaixo da raiz do site
+ * (`/__components/<nivel>/<nome>`), então sem o `<base>` o navegador
+ * resolveria o relativo contra a URL do preview, não contra a raiz — quebra
+ * tanto pro próprio HTML do componente quanto pra um componente aninhado
+ * real (ver `buildNestedComponentScripts`), que carrega seu `.html` original
+ * sem passar por nenhuma reescrita deste plugin.
  */
 function renderComponentPreview(projectRoot, base, level, name) {
   const componentDir = path.join(projectRoot, COMPONENTS_ROOT, level, name);
   const htmlFile = path.join(componentDir, `${name}.html`);
   if (!fs.existsSync(htmlFile)) return null;
 
-  const assetBaseUrl = `${base}${COMPONENTS_ROOT}/${level}/${name}`;
-  const markup = resolveComponentImageSrcs(
-    fs.readFileSync(htmlFile, 'utf-8'),
-    assetBaseUrl,
-  );
+  const rawMarkup = fs.readFileSync(htmlFile, 'utf-8');
   const cssFile = path.join(componentDir, `${name}.css`);
   const ownCss = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
 
@@ -164,10 +172,18 @@ function renderComponentPreview(projectRoot, base, level, name) {
   // o CSS do próprio componente.
   const css = `${readResetCss(projectRoot)}\n${readStyle(projectRoot, 'typograph.css')}\n${readStyle(projectRoot, 'global.css')}\n${ownCss}`;
 
+  const nestedComponentScripts = buildNestedComponentScripts(
+    rawMarkup,
+    name,
+    findComponents(projectRoot),
+  );
+
   return `<!doctype html>
 <html lang="pt-BR">
   <head>
+    <base href="${base}" />
     ${readIndexHeadHtml(projectRoot, `Preview: ${name}`)}
+    ${nestedComponentScripts}
   </head>
   <body>
     <div id="preview-host"></div>
@@ -183,7 +199,7 @@ function renderComponentPreview(projectRoot, base, level, name) {
       shadow.append(style);
 
       const template = document.createElement('template');
-      template.innerHTML = ${JSON.stringify(markup)};
+      template.innerHTML = ${JSON.stringify(rawMarkup)};
       shadow.append(template.content.cloneNode(true));
     </script>
   </body>
