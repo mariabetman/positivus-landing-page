@@ -1,0 +1,74 @@
+.cta-banner__background {
+    background-color: var(--grey);
+    padding: 1.25rem;
+    border-radius: 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.cta-banner__content {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    gap: 1.25rem;
+}
+
+.cta-banner__button {
+    padding: 1.25rem 2.188rem;
+    background-color: var(--black);
+    color: var(--grey);
+    border-radius: 0.875rem;
+    font-weight: normal;
+    font-size: 1.25rem;
+    line-height: 1.75rem;
+    box-sizing: border-box;
+    width: 100%;
+    text-align: center;
+}
+
+.cta-banner__illustration {
+    display: none;
+}
+
+@media(min-width:48rem) {
+    .cta-banner {
+        display: none;
+    } 
+}
+
+@media(min-width:64rem) {
+    .cta-banner {
+        display: block; 
+        box-sizing: border-box;
+        position: relative;
+        padding: 1.469rem 0;
+    }
+
+    .cta-banner__background {
+        padding: 3.75rem;
+    }
+
+    .cta-banner__content {
+        max-width: 31.25rem;
+        gap: 1.625rem;
+    }
+    
+    .cta-banner__button {
+        width: auto; 
+    }
+
+    .cta-banner__illustration {
+        display: block;
+        height: 100%;
+        width: auto;
+        position: absolute;
+        top: 0;
+        right: 8%;
+    }
+
+    .cta-banner__image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+}
