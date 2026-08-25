@@ -1,22 +1,41 @@
 import './positivus-example-card.js';
+import template from './positivus-example-card.html?raw';
+import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
 
 export default {
   title: 'Molecules/PositivusExampleCard',
   tags: ['autodocs'],
+  argTypes: argTypesFromTemplate(template),
+  render: renderWithArgs('positivus-example-card'),
 };
 
 export const Default = {
-  render: () => document.createElement('positivus-example-card'),
+  args: {},
 };
 
 export const CustomContent = {
-  render: () => {
-    const el = document.createElement('positivus-example-card');
-    el.setAttribute('title', 'Consultoria de SEO');
-    el.setAttribute(
-      'text',
-      'Aumente o tráfego orgânico do seu site com estratégias personalizadas.',
-    );
-    return el;
+  args: {
+    title: 'Consultoria de SEO',
+    text: 'Aumente o tráfego orgânico do seu site com estratégias personalizadas.',
   },
+};
+
+export const Highlight = {
+  args: {
+    tone: 'highlight',
+    title: 'Marketing de Conteúdo',
+    text: 'Conte a história da sua marca com conteúdo relevante e envolvente.',
+  },
+};
+
+export const Compact = {
+  args: {
+    variant: 'compact',
+    title: 'Newsletter',
+    text: 'Receba novidades por e-mail.',
+  },
+};
+
+export const CompactHighlight = {
+  args: { variant: 'compact', tone: 'highlight' },
 };
