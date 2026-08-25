@@ -130,7 +130,82 @@ Todo componente pode receber conteúdo customizado via atributo (prop) e usar a 
 - **Prop de texto ou de qualquer atributo**: marque o elemento com `data-prop="nome"` (sem sufixo → vira `textContent`), `data-prop-<atributo>="nome"` (com sufixo → vira aquele atributo via `setAttribute`, funciona pra `src`, `alt`, `href`, `aria-label`, etc.) ou `data-prop-toggle-<atributo>="nome"` (atributo booleano — `disabled`, `checked`... — via `toggleAttribute`, interpretando o valor como `"true"`/`"false"`) no `.html` do componente; quem usa passa `<positivus-x nome="valor">`. Nome do prop sempre em kebab-case (atributo HTML é case-insensitive). O `BaseComponent` resolve isso sozinho (ver `src/components/base-component.md`) — nenhum componente escreve esse JS à mão.
 - **Imagem como prop**: como imagens moram em `public/assets/` (ver "Imagens em public/assets" abaixo), o valor do atributo já é o caminho final — sem `import`, sem script, sem cuidado extra. Ex: `<positivus-x icon="./assets/icons/seta.svg">`.
 - **Composição** (tag de um componente dentro do `.html` de outro, ou direto na `index.html`): escreva a tag normalmente, depois rode `npm run generate:composition-imports` (ver "Geração automática de imports de composição" abaixo) pra garantir que o `.js` daquele componente seja carregado.
-- **Variação visual** (ex: `variant="secondary"`, não é texto/imagem): atributo simples + `:host([variant="secondary"])` no CSS do próprio componente — não usa `data-prop`.
+- **Variação visual sem HTML diferente** (ex: `variant="secondary"` só muda cor/borda): atributo simples + `:host([variant="secondary"])` no CSS do próprio componente — não usa `data-prop`, não usa `data-variant`.
+- **Variação com HTML diferente** (`data-variant`): quando a variante precisa de estrutura diferente de verdade, ver "Variantes com HTML diferente (`data-variant`)" abaixo.
+
+### Variantes com HTML diferente (`data-variant`)
+
+Um componente pode ter mais de uma versão de HTML dentro do **mesmo** `.html` — cada uma marcada com `data-variant="nome"` num elemento de bloco. O `BaseComponent` renderiza **só** o bloco correspondente ao atributo `variant` da tag (o primeiro `data-variant` encontrado é o padrão, usado quando `variant` não é passado ou é inválido) — os outros blocos nunca chegam a existir no Shadow DOM, não é esconder com CSS:
+
+```html
+<!-- positivus-example-card.html -->
+<div class="card" data-variant="default">
+  <img class="card__image" src="..." data-prop-src="image" data-prop-alt="image-alt" />
+  <h2 class="card__title" data-prop="title">Example Card</h2>
+  <p class="card__text" data-prop="text">Este é um componente de exemplo.</p>
+</div>
+
+<div class="card card--compact" data-variant="compact">
+  <h2 class="card__title" data-prop="title">Example Card</h2>
+  <p class="card__text" data-prop="text">Este é um componente de exemplo.</p>
+</div>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card variant="compact" title="Newsletter" text="Receba novidades por e-mail.">
+</positivus-example-card>
+```
+
+- **Classe CSS continua um bloco BEM só**: o elemento com `data-variant` usa a mesma classe de bloco em todas as variantes (`card`), acrescentando um **modificador** (`card--compact`) na(s) variante(s) não padrão — não cria um bloco novo (`card-compact`). Os elementos internos (`card__title`, `card__text`) também continuam os mesmos nos dois blocos, já que semanticamente é o mesmo componente. Ver "Convenção para novos componentes" acima pra regra geral de BEM.
+- Todas as variantes ficam juntas no mesmo arquivo — o dev júnior vê todas as opções na mesma tela ao codar, sem precisar abrir outro componente.
+- `data-prop`/`data-prop-<atributo>` com o **mesmo nome** podem aparecer em mais de um bloco (ex: `title` nos dois acima) — o `BaseComponent` reaplica o valor certo sempre que troca de variante, então o prop funciona igual não importa qual variante está ativa no momento.
+- Nenhum `.js` escreve código pra isso: `static observedAttributes = BaseComponent.extractPropNames(template);` (a mesma linha de sempre) já inclui `variant` sozinho quando o template tem `data-variant` — ver `src/components/base-component.md`.
+- O Storybook já gera uma story por variante encontrada automaticamente — `npm run generate:component` também completa um `.stories.js` **já existente** com a story de uma variante nova (ver "Storybook" abaixo), então rodar o comando de novo depois de adicionar `data-variant` a um componente que já existia já resolve sozinho.
+
+#### Múltiplos eixos de variante (`data-variant-<eixo>`)
+
+Um componente pode ter mais de um eixo de variante independente e
+**combinável** no mesmo `.html`. O eixo sem sufixo continua se chamando
+`variant` (exatamente como acima); eixos extras usam
+`data-variant-<eixo>="valor"` **no mesmo elemento** que já tem
+`data-variant` — o atributo que controla aquele eixo na tag passa a se
+chamar `<eixo>` (mesma relação que já existe entre `data-prop` e
+`data-prop-<atributo>`):
+
+```html
+<!-- positivus-example-card.html -->
+<div class="card" data-variant="default" data-variant-tone="default">...</div>
+<div class="card card--highlight" data-variant="default" data-variant-tone="highlight">...</div>
+<div class="card card--compact" data-variant="compact" data-variant-tone="default">...</div>
+<div class="card card--compact card--highlight" data-variant="compact" data-variant-tone="highlight">...</div>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card variant="compact" tone="highlight"></positivus-example-card>
+```
+
+- **Todo bloco continua precisando de `data-variant`** — é o marcador raiz
+  que identifica "isto é um bloco inteiro"; eixos extras só acrescentam
+  atributos no mesmo elemento, nunca substituem `data-variant`.
+- **Cada combinação é um bloco HTML completo e explícito** — não existe
+  mistura dinâmica de fragmentos. Isso é proposital (mantém a promessa do
+  `data-variant`: tudo visível na mesma tela), mas custa duplicação
+  combinatória (2 eixos × 2 valores = 4 blocos). Por isso, prefira esse
+  mecanismo só até ~2 eixos com poucos valores; pra mais que isso, ou pra
+  variação puramente cosmética sem necessidade de ficar explícita no HTML,
+  volte pra `:host([atributo="..."])` (item "Variação visual sem HTML
+  diferente" acima).
+- Se uma combinação pedida não existir como bloco escrito (autor não
+  cobriu aquele cruzamento), cai no primeiro bloco do template — mesmo
+  fallback que já existe hoje pra um valor de eixo inválido.
+- **Storybook**: cada eixo encontrado vira um `select` próprio no painel
+  Controls, automaticamente (`argTypesFromTemplate` lê todos os eixos, não
+  só `variant`). `npm run generate:component` gera uma story por
+  **combinação** não-toda-padrão (ex: `Compact`, `Highlight` e
+  `CompactHighlight`) e completa as que faltarem num `.stories.js` já
+  existente, do mesmo jeito que já fazia pra um eixo só.
 
 ## Preview automático de componentes (modo dev)
 
@@ -153,7 +228,8 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Varre `src/components/<nivel>/positivus-<nome>/` procurando toda pasta que já tenha um `.html` (mesma lógica de `vite-plugins/positivus-dev-component-index.js`).
 - Pra cada componente encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
 - O teste gerado é mínimo (só confirma que a tag foi registrada via `customElements.get`) — não tenta adivinhar o conteúdo real do `.html`, que quem criou o componente pode complementar depois.
-- Pra cada componente com algum arquivo gerado, o comando já faz `git add` só desses arquivos novos e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
+- **Exceção ao "nunca sobrescreve"**: se o `.stories.js` já existir e o `.html` tiver ganhado uma variante nova (`data-variant`) desde a última vez que rodou, o comando **acrescenta** só a story daquela variante nova no fim do arquivo (procura por `export const <NomeDaVariante>` — se já existir, não mexe em nada) — nunca toca no resto do arquivo nem apaga o que já estava lá. Rode `npm run generate:component` de novo depois de adicionar `data-variant` a um componente que já existia pra pegar essa story automaticamente.
+- Pra cada componente com algum arquivo gerado ou `.stories.js` atualizado, o comando já faz `git add` só desse arquivo e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` pra criação, `feat: adiciona story de variante em positivus-<nome>` pra story extra (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
 
@@ -181,27 +257,47 @@ Custom Elements se auto-atualizam onde aparecerem (inclusive dentro de Shadow DO
 
 ## Storybook
 
-Cada componente tem uma story co-localizada na sua própria pasta (`positivus-<nome>.stories.js`), obrigatória para todo componente novo (ver "Convenção para novos componentes" acima).
+Cada componente tem uma story co-localizada na sua própria pasta (`positivus-<nome>.stories.js`), obrigatória para todo componente novo (ver "Convenção para novos componentes" acima) — `npm run generate:component` já gera ela sozinha, no formato abaixo, então normalmente não precisa escrever isso à mão:
 
 ```js
 // src/components/molecules/positivus-example-card/positivus-example-card.stories.js
 import './positivus-example-card.js';
+import template from './positivus-example-card.html?raw';
+import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
 
 export default {
   title: 'Molecules/PositivusExampleCard', // agrupa por nível atômico: Atoms/Molecules/Organisms
   tags: ['autodocs'],
+  argTypes: argTypesFromTemplate(template), // um controle de texto pra cada data-prop do componente
+  render: renderWithArgs('positivus-example-card'),
 };
 
 export const Default = {
-  render: () => document.createElement('positivus-example-card'),
+  args: {}, // vazio = usa o conteúdo padrão do próprio componente
+};
+
+export const CustomContent = {
+  args: {
+    title: 'Consultoria de SEO',
+    text: 'Aumente o tráfego orgânico do seu site com estratégias personalizadas.',
+  },
+};
+
+export const Compact = {
+  args: { variant: 'compact', title: 'Newsletter', text: 'Receba novidades por e-mail.' },
 };
 ```
 
 Regras:
 
-- `title` sempre no formato `<Nível>/<NomeDaClasse>` (ex: `Atoms/PositivusButton`), pra manter a navegação do Storybook alinhada com Atomic Design.
-- Como os componentes são Custom Elements nativos (sem Lit), o `render` de cada story cria o elemento via `document.createElement('positivus-<nome>')` e, se precisar passar props customizados, usa `el.setAttribute('nome', 'valor')` antes de retornar (ver "Props e composição de componentes" acima).
-- `.storybook/main.js` e `.storybook/preview.js` configuram o Storybook para usar o Vite (`@storybook/web-components-vite`) e carregar `reset.css` + `global.css` globalmente.
+- `title` sempre no formato `<Nível>/<NomeDaClasse>` (ex: `Atoms/PositivusButton`), pra manter a navegação do Storybook alinhada com Atomic Design — mesmo pra componente com variantes (`data-variant`), já que continua sendo **um** componente só; as variantes viram stories extras (`Compact` acima), não pastas novas.
+- `src/components/storybook-helpers.js` centraliza a lógica que faz toda prop (`data-prop`) aparecer como um controle editável no painel **Controls** do Storybook, sem precisar listar cada prop à mão:
+  - `argTypesFromTemplate(template)` lê os nomes de prop do próprio template (`BaseComponent.extractPropNames`, a mesma leitura que `static observedAttributes` já faz) e devolve um `argTypes` com um controle `'text'` pra cada um — exceto cada eixo de variante encontrado (`variant`, e qualquer `data-variant-<eixo>` adicional — ver "Múltiplos eixos de variante" acima), que vira um controle `'select'` com os valores daquele eixo (`BaseComponent.extractVariantAxes`).
+  - `renderWithArgs(tagName)` devolve a função `render`: cria a tag e aplica cada `arg` como atributo (`setAttribute`) — o mesmo que quem usa o componente de verdade faria.
+  - Cada story então só declara `args` (os valores daquele exemplo específico) — editáveis ao vivo no painel Controls, sem precisar editar o código pra testar uma prop ou variante diferente.
+- `npm run generate:component` já gera uma story extra por **combinação** de eixos de variante não-toda-padrão (ver `scripts/generate-component-files.js`) — tanto pra componente novo quanto pra um `.stories.js` já existente (acrescenta só as combinações que ainda não tiver, sem sobrescrever nada). Com um eixo só, isso é "uma story por valor não-padrão", igual sempre foi; com mais de um eixo, o nome concatena o `toPascalCase` de cada valor não-padrão da combinação, na ordem dos eixos (ex: `variant=compact` + `tone=highlight` → `CompactHighlight`). Se você já tiver criado uma story com outro nome pra mesma combinação (ex: um `AsButton` pra `variant="button"`), o comando não reconhece isso como "já coberta" e acrescenta a story `Button` mesmo assim; nesse caso, apague a duplicada que preferir manter.
+- Pra cada componente com prop's, pelo menos uma story além da `Default` deve demonstrar um valor customizado (ex: `CustomContent` acima) — ajuda quem for usar o componente a ver rapidamente que aceita props, mesmo sem abrir o painel Controls.
+- `.storybook/main.js` e `.storybook/preview.js` configuram o Storybook para usar o Vite (`@storybook/web-components-vite`) e carregar `reset.css` + `global.css` globalmente. O `stories` do `main.js` usa caminho **absoluto** (via `path.join` + `fileURLToPath`, normalizado pra `/`) em vez de `'../src/...'` relativo — necessário pra contornar um bug conhecido do `@storybook/builder-vite` quando o config fica numa subpasta (`.storybook/`) e o glob de stories sobe um nível (sintoma: `TypeError: importers[path] is not a function`, preview sempre em branco) — não trocar de volta pra caminho relativo.
 - `storybook-static/` (saída de `npm run build-storybook`) é ignorada no git, assim como `dist/`.
 
 ## Testes

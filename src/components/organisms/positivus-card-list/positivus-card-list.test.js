@@ -13,6 +13,7 @@ describe('positivus-card-list', () => {
     const cards = el.shadowRoot.querySelectorAll('positivus-example-card');
     expect(cards).toHaveLength(3);
     expect(cards[0].getAttribute('title')).toBe('Consultoria de SEO');
+    expect(cards[2].getAttribute('tone')).toBe('highlight');
 
     el.remove();
   });

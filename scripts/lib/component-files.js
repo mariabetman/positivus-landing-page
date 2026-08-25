@@ -17,12 +17,17 @@ export function listLevels(projectRoot) {
     .readdirSync(componentsDir)
     .filter((entry) =>
       fs.statSync(path.join(componentsDir, entry)).isDirectory(),
-    );
+    )
+    .sort();
 }
 
 /**
  * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes que
  * já tenham o .html (mesmo padrão do vite-plugins/positivus-dev-component-index.js).
+ * Ordenado por nome — além de determinístico, isso faz uma família de
+ * variantes (positivus-x, positivus-x-compact...) aparecer sempre agrupada
+ * e em ordem no preview de dev (`npm run generate:composition-imports` e os
+ * outros scripts também dependem dessa mesma ordem pra rodar sempre igual).
  */
 export function findComponents(projectRoot) {
   const components = [];
@@ -30,7 +35,7 @@ export function findComponents(projectRoot) {
   for (const level of listLevels(projectRoot)) {
     const levelDir = path.join(projectRoot, COMPONENTS_ROOT, level);
 
-    for (const name of fs.readdirSync(levelDir)) {
+    for (const name of fs.readdirSync(levelDir).sort()) {
       const componentDir = path.join(levelDir, name);
       if (!fs.statSync(componentDir).isDirectory()) continue;
 
@@ -96,6 +101,33 @@ export function extractNestedComponentTags(htmlContent, ownName) {
 
 export function findComponentByTagName(components, tagName) {
   return components.find((component) => component.name === tagName);
+}
+
+const VARIANT_ATTRIBUTE_PATTERN = /data-variant(?:-([a-z-]+))?\s*=\s*["']([^"']+)["']/g;
+
+/**
+ * Lê os eixos de `data-variant`/`data-variant-<eixo>` presentes no `.html`
+ * de um componente, agrupados por eixo, com os valores na ordem em que
+ * aparecem (o primeiro é o padrão daquele eixo) — usado pra gerar uma
+ * story por combinação em `generate-component-files.js`. Mesma regra de
+ * `BaseComponent.extractVariantAxes` (duplicada aqui de propósito: aquela
+ * roda no navegador, essa aqui é só leitura de arquivo em Node, sem nada
+ * em comum pra compartilhar de verdade).
+ */
+export function extractVariantAxes(htmlContent) {
+  const axes = new Map();
+
+  for (const [, axisSuffix, value] of htmlContent.matchAll(
+    VARIANT_ATTRIBUTE_PATTERN,
+  )) {
+    const axisName = axisSuffix ?? 'variant';
+    if (!axes.has(axisName)) axes.set(axisName, []);
+
+    const values = axes.get(axisName);
+    if (!values.includes(value)) values.push(value);
+  }
+
+  return [...axes.entries()].map(([name, values]) => ({ name, values }));
 }
 
 /**

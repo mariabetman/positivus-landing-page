@@ -44,6 +44,31 @@ class NestedParentFixture extends BaseComponent {
 
 customElements.define('nested-parent-fixture', NestedParentFixture);
 
+const variantTemplate = `
+  <div class="variant-fixture__default" data-variant="default" data-variant-tone="default">
+    <p class="variant-fixture__text" data-prop="text">Texto padrão</p>
+  </div>
+  <div class="variant-fixture__default variant-fixture__dark" data-variant="default" data-variant-tone="dark">
+    <p class="variant-fixture__text" data-prop="text">Texto padrão</p>
+  </div>
+  <div class="variant-fixture__compact" data-variant="compact" data-variant-tone="default">
+    <p class="variant-fixture__text" data-prop="text">Texto padrão</p>
+  </div>
+  <div class="variant-fixture__compact variant-fixture__dark" data-variant="compact" data-variant-tone="dark">
+    <p class="variant-fixture__text" data-prop="text">Texto padrão</p>
+  </div>
+`;
+
+class VariantFixture extends BaseComponent {
+  static observedAttributes = BaseComponent.extractPropNames(variantTemplate);
+
+  constructor() {
+    super({ template: variantTemplate });
+  }
+}
+
+customElements.define('variant-fixture', VariantFixture);
+
 describe('BaseComponent', () => {
   it('extractPropNames lê os nomes de data-prop, data-prop-<atributo> e data-prop-toggle-<atributo> do template, sem duplicar', () => {
     expect(BaseComponent.extractPropNames(template)).toEqual([
@@ -157,6 +182,109 @@ describe('BaseComponent', () => {
     expect(child.shadowRoot.querySelector('.child__icon').src).toBe(
       'https://example.com/resolved-icon.png',
     );
+
+    el.remove();
+  });
+
+  it('extractVariantAxes lê os eixos de data-variant/data-variant-<eixo> do template, agrupados e na ordem em que aparecem', () => {
+    expect(BaseComponent.extractVariantAxes(variantTemplate)).toEqual([
+      { name: 'variant', values: ['default', 'compact'] },
+      { name: 'tone', values: ['default', 'dark'] },
+    ]);
+  });
+
+  it('extractPropNames inclui o nome de cada eixo de variante quando o template tem data-variant', () => {
+    const propNames = BaseComponent.extractPropNames(variantTemplate);
+    expect(propNames).toContain('variant');
+    expect(propNames).toContain('tone');
+  });
+
+  it('renderiza só o bloco da variante padrão (a primeira) quando nenhum atributo variant é passado', () => {
+    const el = document.createElement('variant-fixture');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__compact')).toBeNull();
+
+    el.remove();
+  });
+
+  it('renderiza só o bloco pedido em variant, sem o outro nunca existir no DOM', () => {
+    const el = document.createElement('variant-fixture');
+    el.setAttribute('variant', 'compact');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__compact')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).toBeNull();
+
+    el.remove();
+  });
+
+  it('troca de bloco quando o atributo variant muda depois de criado', () => {
+    const el = document.createElement('variant-fixture');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).not.toBeNull();
+
+    el.setAttribute('variant', 'compact');
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__compact')).not.toBeNull();
+
+    el.remove();
+  });
+
+  it('reaplica um prop compartilhado (mesmo nome nos dois blocos) depois de trocar de variante', () => {
+    const el = document.createElement('variant-fixture');
+    el.setAttribute('text', 'Texto customizado');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__text').textContent).toBe(
+      'Texto customizado',
+    );
+
+    el.setAttribute('variant', 'compact');
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__text').textContent).toBe(
+      'Texto customizado',
+    );
+
+    el.remove();
+  });
+
+  it('troca só o eixo tone, mantendo variant no padrão', () => {
+    const el = document.createElement('variant-fixture');
+    el.setAttribute('tone', 'dark');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__dark')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__compact')).toBeNull();
+
+    el.remove();
+  });
+
+  it('combina os dois eixos ao mesmo tempo (variant=compact + tone=dark)', () => {
+    const el = document.createElement('variant-fixture');
+    el.setAttribute('variant', 'compact');
+    el.setAttribute('tone', 'dark');
+    document.body.append(el);
+
+    const block = el.shadowRoot.querySelector('.variant-fixture__compact');
+    expect(block).not.toBeNull();
+    expect(block.classList.contains('variant-fixture__dark')).toBe(true);
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).toBeNull();
+
+    el.remove();
+  });
+
+  it('cai no padrão daquele eixo quando um valor de tone inválido é passado', () => {
+    const el = document.createElement('variant-fixture');
+    el.setAttribute('tone', 'nao-existe');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.variant-fixture__default')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.variant-fixture__dark')).toBeNull();
 
     el.remove();
   });

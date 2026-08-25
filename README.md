@@ -142,7 +142,7 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
 
    A `static observedAttributes` é o que faz os `data-prop`/`data-prop-<atributo>` do passo 2 funcionarem — ela é calculada automaticamente a partir do `.html`, não precisa editar isso na mão nunca.
 
-5. **Complemente o teste e a story gerados** (eles saem mínimos, só confirmando que a tag foi registrada) — ex: testar que o link/texto padrão aparece, e que passar `link="..."` via atributo troca o `href` de verdade.
+5. **Complemente o teste gerado** (ele sai mínimo, só confirmando que a tag foi registrada) — ex: testar que o link/texto padrão aparece, e que passar `link="..."` via atributo troca o `href` de verdade. A **story** já sai pronta com as props do componente aparecendo como controles editáveis no painel Controls do Storybook (ver "Passo a passo: parametrizando..." abaixo) — normalmente só precisa adicionar mais uma story com um `args` diferente, mostrando um uso customizado (ver `CustomContent` no [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js) como exemplo).
 
 6. **Use a tag** onde precisar — `index.html`, ou dentro do `.html` de outro componente:
 
@@ -194,6 +194,17 @@ Qualquer componente pode receber texto/atributo customizado via atributo HTML, s
 ## Passo a passo: usando um componente dentro de outro (composição)
 
 Não tem sintaxe nova — escreva a tag normalmente dentro do `.html` de outro componente (ou da `index.html`), passando prop se quiser, e depois rode `npm run generate:composition-imports` (ver passo 7 acima). Exemplo de verdade já no projeto: [`positivus-card-list`](./src/components/organisms/positivus-card-list), que usa `positivus-example-card` três vezes dentro do próprio `.html`.
+
+## Variantes de um componente (HTML diferente, não só CSS)
+
+Uma variação só de estilo usa atributo simples + `:host([variant="..."])` no CSS (ver [`component-props.md`](./src/components/component-props.md)). Quando a variante precisa de **HTML diferente**, marque cada versão com `data-variant="nome"` dentro do **mesmo** `.html` — o componente renderiza só o bloco da variante ativa (o primeiro `data-variant` encontrado é o padrão); os outros nunca chegam a existir no Shadow DOM. Exemplo de verdade já no projeto: [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.html), que tem um bloco `default` (com imagem) e um `compact` (só título/texto):
+
+```html
+<positivus-example-card variant="compact" title="Newsletter" text="Receba novidades por e-mail.">
+</positivus-example-card>
+```
+
+Todas as variantes ficam juntas no mesmo arquivo (fácil de ver/editar todas de uma vez), e `npm run generate:component` já gera uma story por variante encontrada sozinho — inclusive pra um componente que já existia antes de ganhar `data-variant`: rode o comando de novo depois de adicionar a variante nova no `.html`, e ele acrescenta só a story que falta no `.stories.js` que já existe (ver o formato em `Compact`, no [`positivus-example-card.stories.js`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js)).
 
 ## Passo a passo: adicionando uma imagem a um componente
 
