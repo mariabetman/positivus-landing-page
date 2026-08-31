@@ -275,9 +275,18 @@ apontar pro mesmo lugar.
 
 ## Variação visual (não é prop de conteúdo)
 
-Pra uma variação puramente visual (ex: `variant="secondary"` num botão), não
-use `data-prop` — isso é pra texto/imagem. Use um atributo simples + seletor
-de atributo no CSS do próprio componente:
+Pra uma variação puramente visual, o padrão do projeto é `data-prop-modifier`
+(ver seção acima) — soma `<classe-base>--<valor>` na `classList` sozinho, sem
+precisar escrever seletor nenhum, e já aparece como prop de verdade
+(`static observedAttributes`, controle no Storybook). Use isso por padrão
+pra qualquer variação de estilo sem estrutura diferente.
+
+### Caso raro: atributo simples + `:host([attr])` no CSS
+
+Só vale a pena fugir do `data-prop-modifier` quando você nem quer que o
+valor vire uma classe/prop de verdade — ex: um atributo que só existe pro
+CSS reagir, sem nenhum outro uso. Nesse caso (raro), um atributo simples +
+seletor de atributo no CSS do próprio componente também funciona:
 
 ```html
 <!-- uso -->
@@ -294,13 +303,16 @@ de atributo no CSS do próprio componente:
 
 Isso já é reativo sozinho (seletor de atributo do navegador atualiza a
 aparência automaticamente quando o atributo muda) — nenhuma mudança no
-`BaseComponent` precisa disso.
+`BaseComponent` precisa disso. Mas repare que, diferente de
+`data-prop-modifier`, esse atributo **não** é descoberto automaticamente
+por `extractPropNames`/Storybook — precisa declarar o controle à mão no
+`.stories.js` se quiser editá-lo pelo painel Controls.
 
 ## Variantes em arquivo (`variants/<eixo>/<valor>.html`)
 
-O padrão anterior (`:host([variant="..."])`) só resolve quando a diferença
-é puramente visual. Quando a variante precisa de **estrutura** diferente de
-verdade (não só classe/estilo), o componente ganha uma pasta `variants/` —
+Nenhuma das opções acima (`data-prop-modifier` ou `:host([attr])`) resolve
+quando a diferença é de **estrutura**, não só classe/estilo — pra isso, o
+componente ganha uma pasta `variants/` —
 uma subpasta por eixo, um arquivo por valor não-padrão daquele eixo (o
 valor padrão de qualquer eixo é sempre `'default'`, sem arquivo — é o
 próprio `.html` principal, ou "nenhuma classe extra"):
@@ -392,9 +404,8 @@ Pontos importantes:
 - Se passar um `variant`/eixo de estilo que não existe (ou sem arquivo
   correspondente), cai no padrão daquele eixo — nunca quebra.
 - **Prefira no máximo ~2 eixos com poucos valores** — cada eixo de estilo é
-  livre (não duplica nada), mas se a variação for puramente cosmética e nem
-  precisar ficar explícita em HTML, `:host([attr="..."])` (seção anterior)
-  continua uma opção mais simples.
+  livre (não duplica nada), mas se a variação for puramente cosmética,
+  `data-prop-modifier` (acima) resolve sem precisar de arquivo nenhum.
 
 ## Storybook — props e variantes visíveis pro dev
 

@@ -129,18 +129,24 @@ Exemplo criando um componente fictício `positivus-button` como **atom**. Troque
    import template from './positivus-button.html?raw';
    import styles from './positivus-button.css?inline';
 
+   const variantFiles = import.meta.glob('./variants/**/*.html', {
+     eager: true,
+     query: '?raw',
+     import: 'default',
+   });
+
    export class PositivusButton extends BaseComponent {
-     static observedAttributes = BaseComponent.extractPropNames(template);
+     static observedAttributes = BaseComponent.extractPropNames(template, variantFiles);
 
      constructor() {
-       super({ template, styles });
+       super({ template, styles, variantFiles });
      }
    }
 
    customElements.define('positivus-button', PositivusButton);
    ```
 
-   A `static observedAttributes` é o que faz os `data-prop`/`data-prop-<atributo>` do passo 2 funcionarem — ela é calculada automaticamente a partir do `.html`, não precisa editar isso na mão nunca.
+   A `static observedAttributes` é o que faz os `data-prop`/`data-prop-<atributo>` do passo 2 funcionarem — ela é calculada automaticamente a partir do `.html`, não precisa editar isso na mão nunca. O `variantFiles` sai sempre igual, mesmo sem nenhuma variante ainda — só entra em ação se o componente ganhar uma pasta `variants/` depois (ver "Variantes de um componente" abaixo).
 
 5. **Complemente o teste gerado** (ele sai mínimo, só confirmando que a tag foi registrada) — ex: testar que o link/texto padrão aparece, e que passar `link="..."` via atributo troca o `href` de verdade. A **story** já sai pronta com as props do componente aparecendo como controles editáveis no painel Controls do Storybook (ver "Passo a passo: parametrizando..." abaixo) — normalmente só precisa adicionar mais uma story com um `args` diferente, mostrando um uso customizado (ver `CustomContent` no [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js) como exemplo).
 
@@ -197,7 +203,7 @@ Não tem sintaxe nova — escreva a tag normalmente dentro do `.html` de outro c
 
 ## Variantes de um componente (HTML diferente, não só CSS)
 
-Uma variação só de estilo tem duas opções, dependendo se os valores possíveis são conhecidos de antemão: atributo simples + `:host([tone="..."])` no CSS (qualquer valor, mas não vira classe sozinho), ou `data-prop-modifier="nome"` (qualquer valor vira `<classe-base>--<valor>` na `classList` sozinho, ver [`component-props.md`](./src/components/component-props.md)). Quando a variante precisa de **HTML diferente** de verdade, o componente ganha uma pasta `variants/<eixo>/<valor>.html` — `variant` é o único eixo que pode trocar a estrutura inteira; qualquer outro eixo é só uma classe modificadora (arquivo por valor, aparece como `select` no Storybook), e os dois combinam livremente em runtime. Exemplo de verdade já no projeto: [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.html) — `.html` principal = default, `variants/variant/compact.html` troca a estrutura (sem imagem); já o `appearance` (`highlight`) usa `data-prop-modifier`, não `variants/`, já que só tem um valor não-padrão:
+Uma variação só de estilo usa `data-prop-modifier="nome"` por padrão — soma `<classe-base>--<valor>` na `classList` sozinho, sem precisar escrever seletor CSS nenhum (ver [`component-props.md`](./src/components/component-props.md)). Atributo simples + `:host([attr="..."])` no CSS direto é um caso raro, só quando você nem quer que o valor vire classe/prop de verdade. Quando a variante precisa de **HTML diferente** de verdade, o componente ganha uma pasta `variants/<eixo>/<valor>.html` — `variant` é o único eixo que pode trocar a estrutura inteira; qualquer outro eixo é só uma classe modificadora (arquivo por valor, aparece como `select` no Storybook), e os dois combinam livremente em runtime. Exemplo de verdade já no projeto: [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.html) — `.html` principal = default, `variants/variant/compact.html` troca a estrutura (sem imagem); já o `appearance` (`highlight`) usa `data-prop-modifier`, não `variants/`, já que só tem um valor não-padrão:
 
 ```html
 <positivus-example-card variant="compact" appearance="highlight" title="Newsletter" text="Receba novidades por e-mail.">
