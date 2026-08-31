@@ -8,6 +8,10 @@
   border-radius: 8px;
 }
 
+.card__image-link {
+  display: block;
+}
+
 .card__image {
   width: 100%;
   max-width: 240px;
@@ -17,6 +21,12 @@
 
 .card__title {
   margin-bottom: 0.5rem;
+}
+
+.card__link {
+  display: inline-block;
+  margin-top: 0.5rem;
+  color: var(--black);
 }
 
 .card--compact {

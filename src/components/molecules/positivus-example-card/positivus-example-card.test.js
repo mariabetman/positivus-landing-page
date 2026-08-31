@@ -37,7 +37,7 @@ describe('positivus-example-card', () => {
 
   it('overrides the image via attribute', () => {
     const el = document.createElement('positivus-example-card');
-    el.setAttribute('image', 'https://example.com/icon.png');
+    el.setAttribute('src', 'https://example.com/icon.png');
     document.body.append(el);
 
     expect(el.shadowRoot.querySelector('.card__image').src).toBe(
@@ -49,13 +49,55 @@ describe('positivus-example-card', () => {
 
   it('overrides the image alt text via attribute', () => {
     const el = document.createElement('positivus-example-card');
-    el.setAttribute('image', 'https://example.com/icon.png');
-    el.setAttribute('image-alt', 'Foto do produto');
+    el.setAttribute('src', 'https://example.com/icon.png');
+    el.setAttribute('alt', 'Foto do produto');
     document.body.append(el);
 
     const image = el.shadowRoot.querySelector('.card__image');
     expect(image.src).toBe('https://example.com/icon.png');
     expect(image.alt).toBe('Foto do produto');
+
+    el.remove();
+  });
+
+  it('overrides the "Saiba mais" link href independently, via the href attribute', () => {
+    const el = document.createElement('positivus-example-card');
+    el.setAttribute('href', 'https://exemplo.com/produto');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.card__link').getAttribute('href')).toBe(
+      'https://exemplo.com/produto',
+    );
+    expect(el.shadowRoot.querySelector('.card__image-link').getAttribute('href')).toBe('#');
+
+    el.remove();
+  });
+
+  it('overrides the image link href independently, via the image-href attribute', () => {
+    const el = document.createElement('positivus-example-card');
+    el.setAttribute('image-href', 'https://exemplo.com/galeria');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.card__image-link').getAttribute('href')).toBe(
+      'https://exemplo.com/galeria',
+    );
+    expect(el.shadowRoot.querySelector('.card__link').getAttribute('href')).toBe('#');
+
+    el.remove();
+  });
+
+  it('accepts two independent hrefs at the same time, one for each link', () => {
+    const el = document.createElement('positivus-example-card');
+    el.setAttribute('href', 'https://exemplo.com/produto');
+    el.setAttribute('image-href', 'https://exemplo.com/galeria');
+    document.body.append(el);
+
+    expect(el.shadowRoot.querySelector('.card__link').getAttribute('href')).toBe(
+      'https://exemplo.com/produto',
+    );
+    expect(el.shadowRoot.querySelector('.card__image-link').getAttribute('href')).toBe(
+      'https://exemplo.com/galeria',
+    );
 
     el.remove();
   });
@@ -68,7 +110,6 @@ describe('positivus-example-card', () => {
     expect(el.shadowRoot.querySelector('.card__title').textContent).toBe(
       'Example Card',
     );
-    expect(el.shadowRoot.querySelector('[data-variant="default"]')).toBeNull();
     expect(el.shadowRoot.querySelector('.card--compact')).not.toBeNull();
     expect(el.shadowRoot.querySelector('.card__image')).toBeNull();
 
@@ -93,11 +134,11 @@ describe('positivus-example-card', () => {
     el.setAttribute('title', 'Consultoria de SEO');
     document.body.append(el);
 
-    expect(el.shadowRoot.querySelector('[data-variant="default"]')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.card__image')).not.toBeNull();
 
     el.setAttribute('variant', 'compact');
 
-    expect(el.shadowRoot.querySelector('[data-variant="default"]')).toBeNull();
+    expect(el.shadowRoot.querySelector('.card__image')).toBeNull();
     expect(el.shadowRoot.querySelector('.card__title').textContent).toBe(
       'Consultoria de SEO',
     );
@@ -110,15 +151,15 @@ describe('positivus-example-card', () => {
     el.setAttribute('variant', 'nao-existe');
     document.body.append(el);
 
-    expect(el.shadowRoot.querySelector('[data-variant="default"]')).not.toBeNull();
-    expect(el.shadowRoot.querySelector('[data-variant="compact"]')).toBeNull();
+    expect(el.shadowRoot.querySelector('.card__image')).not.toBeNull();
+    expect(el.shadowRoot.querySelector('.card--compact')).toBeNull();
 
     el.remove();
   });
 
-  it('renders the highlight tone as a modifier class, on top of the default variant', () => {
+  it('renders the highlight appearance as a modifier class, on top of the default variant', () => {
     const el = document.createElement('positivus-example-card');
-    el.setAttribute('tone', 'highlight');
+    el.setAttribute('appearance', 'highlight');
     document.body.append(el);
 
     const card = el.shadowRoot.querySelector('.card');
@@ -129,10 +170,10 @@ describe('positivus-example-card', () => {
     el.remove();
   });
 
-  it('combines variant=compact and tone=highlight at the same time', () => {
+  it('combines variant=compact and appearance=highlight at the same time', () => {
     const el = document.createElement('positivus-example-card');
     el.setAttribute('variant', 'compact');
-    el.setAttribute('tone', 'highlight');
+    el.setAttribute('appearance', 'highlight');
     document.body.append(el);
 
     const card = el.shadowRoot.querySelector('.card');
@@ -143,7 +184,7 @@ describe('positivus-example-card', () => {
     el.remove();
   });
 
-  it('does not add the highlight modifier when tone is left at its default', () => {
+  it('does not add the highlight modifier when appearance is left at its default', () => {
     const el = document.createElement('positivus-example-card');
     document.body.append(el);
 
