@@ -11,11 +11,13 @@ describe('positivus-card-list', () => {
     document.body.append(el);
 
     const cards = el.shadowRoot.querySelectorAll('positivus-example-card');
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
     expect(cards[0].getAttribute('title')).toBe('Consultoria de SEO');
     expect(cards[0].getAttribute('href')).toBe('#consultoria-de-seo');
     expect(cards[0].getAttribute('image-href')).toBe('#consultoria-de-seo-galeria');
     expect(cards[2].getAttribute('appearance')).toBe('highlight');
+    expect(cards[3].getAttribute('variant')).toBe('compact');
+    expect(cards[3].getAttribute('title')).toBe('Newsletter');
 
     el.remove();
   });
