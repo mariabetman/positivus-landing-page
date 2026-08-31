@@ -128,9 +128,48 @@ Regras:
 Todo componente pode receber conteúdo customizado via atributo (prop) e usar a tag de outro componente já existente dentro do próprio `.html` — sem escrever JavaScript pra isso. Convenção completa, com exemplos, em [`src/components/component-props.md`](src/components/component-props.md). Resumo:
 
 - **Prop de texto ou de qualquer atributo**: marque o elemento com `data-prop="nome"` (sem sufixo → vira `textContent`), `data-prop-<atributo>="nome"` (com sufixo → vira aquele atributo via `setAttribute`, funciona pra `src`, `alt`, `href`, `aria-label`, etc.) ou `data-prop-toggle-<atributo>="nome"` (atributo booleano — `disabled`, `checked`... — via `toggleAttribute`, interpretando o valor como `"true"`/`"false"`) no `.html` do componente; quem usa passa `<positivus-x nome="valor">`. Nome do prop sempre em kebab-case (atributo HTML é case-insensitive). O `BaseComponent` resolve isso sozinho (ver `src/components/base-component.md`) — nenhum componente escreve esse JS à mão.
+- **Nome do prop é um apelido, não precisa ser igual ao nome do atributo** — dois elementos que usam o mesmo atributo real (ex: dois `<a href>`) podem ter apelidos diferentes (`data-prop-href="link"` e `data-prop-href="image-link"`) e virarem props **independentes**; se usarem o mesmo apelido de propósito, os dois recebem o mesmo valor juntos (ver "Dois elementos com o mesmo nome de atributo" em `component-props.md`).
+- **Prop de modificador de estilo (padrão do projeto pra variação visual sem HTML diferente)**: `data-prop-modifier="nome"` soma `<classe-base>--<valor>` na `classList` do elemento (`classList.add`, nunca `setAttribute('class', ...)` — não apaga as outras classes já presentes). A classe-base é sempre a **primeira** classe já escrita no elemento (convenção BEM de bloco vindo primeiro) — se o elemento não tiver nenhuma classe, o `BaseComponent` lança um erro na hora (em vez de deixar vazar uma classe `"undefined--valor"`). Diferente de `variants/<eixo>/`, não precisa de arquivo por valor — qualquer string vira `<classe-base>--<valor>` na hora, então é mais flexível, mas (a) não aparece como `select` no Storybook (vira campo de texto livre) e (b) **não aparece no preview de dev** (`/__components`, ver abaixo) — esse preview só enumera automaticamente eixos que vivem de verdade em `variants/`; um `data-prop-modifier` é tratado como prop comum, então só mostra o valor padrão ali (mesma regra de qualquer outro `data-prop`/`data-prop-<atributo>`). Pra ver outros valores, use o Storybook.
+- **Nunca use `data-prop-class="nome"`** pra sobrescrever `class` direto — `setAttribute('class', ...)` substitui a classe inteira e apagaria a classe BEM do elemento. Pra somar uma classe, use `data-prop-modifier` acima.
 - **Imagem como prop**: como imagens moram em `public/assets/` (ver "Imagens em public/assets" abaixo), o valor do atributo já é o caminho final — sem `import`, sem script, sem cuidado extra. Ex: `<positivus-x icon="./assets/icons/seta.svg">`.
 - **Composição** (tag de um componente dentro do `.html` de outro, ou direto na `index.html`): escreva a tag normalmente, depois rode `npm run generate:composition-imports` (ver "Geração automática de imports de composição" abaixo) pra garantir que o `.js` daquele componente seja carregado.
-- **Variação visual** (ex: `variant="secondary"`, não é texto/imagem): atributo simples + `:host([variant="secondary"])` no CSS do próprio componente — não usa `data-prop`.
+- **Caso raro — atributo simples + `:host([attr])` no CSS**: só considere isso em vez de `data-prop-modifier` quando você nem quer que o valor vire uma classe/prop de verdade (ex: `tone="dark"` só reagindo direto no CSS, sem `static observedAttributes` nem controle automático no Storybook). Fora desse caso específico, prefira sempre `data-prop-modifier`.
+- **Variação com HTML diferente** (`variants/`): quando a variante precisa de estrutura diferente de verdade, ver "Variantes em arquivo (`variants/<eixo>/<valor>.html`)" abaixo.
+
+### Variantes em arquivo (`variants/<eixo>/<valor>.html`)
+
+Um componente pode ter variantes vivendo em arquivos próprios, dentro de uma pasta `variants/` na própria pasta do componente — uma subpasta por eixo, um arquivo por valor não-padrão daquele eixo (o valor padrão de qualquer eixo é sempre a string `'default'`, sem arquivo: é o próprio `.html` principal, ou "nenhuma classe extra"):
+
+```
+positivus-example-card/
+  positivus-example-card.html   ← conteúdo com todos os eixos no padrão
+  positivus-example-card.css
+  positivus-example-card.js
+  variants/
+    variant/
+      compact.html               ← eixo estrutural: bloco HTML completo
+    size/
+      large.html                  ← eixo de estilo: só a classe modificadora
+```
+
+(o `positivus-example-card` de verdade só tem o eixo `variant`, com `compact.html`, em `variants/` hoje — `size`/`large` acima é só ilustrativo de como ficaria um segundo eixo de estilo via arquivo; o `appearance`/`highlight` real dele usa `data-prop-modifier`, não `variants/`, já que só tem um valor não-padrão.)
+
+- **`variant` é o único eixo estrutural**: `variants/variant/<valor>.html` contém um bloco HTML completo que **substitui inteiro** o `.html` principal quando aquele valor está ativo — mesma ideia de "HTML totalmente diferente" que existia antes, só que em arquivo em vez de bloco inline.
+- **Qualquer outro eixo é um eixo de estilo**: `variants/<eixo>/<valor>.html` contém só um elemento com a(s) classe(s) modificadora(s) a aplicar (ex: `<div class="card--highlight"></div>`) — o `BaseComponent` soma essas classes na `classList` do elemento raiz já renderizado (seja o `.html` principal, seja o bloco `variant` ativo). **Não dá pra ter dois eixos totalmente estruturais** (não existe forma de "somar" dois blocos HTML completos independentes) — por isso só `variant` pode trocar estrutura; qualquer eixo adicional é sempre só uma classe.
+- Isso é o que permite `variant` + N eixos de estilo **combinarem livremente em runtime**, sem duplicar arquivo por cruzamento: `variant="compact"` + `size="large"` reaplica o bloco `compact` com a classe `card--large` somada, sem precisar de um arquivo `compact-large`.
+- **Carregamento é uma linha fixa**, sempre igual, em todo `.js`/`.stories.js` de componente (já sai assim de `npm run generate:component`, funciona igual com 0 ou N arquivos em `variants/`):
+  ```js
+  const variantFiles = import.meta.glob('./variants/**/*.html', {
+    eager: true,
+    query: '?raw',
+    import: 'default',
+  });
+  ```
+  Passado pro `super({ template, styles, variantFiles })` e pra `BaseComponent.extractPropNames(template, variantFiles)` — nenhum script precisa gerar/manter esses imports; adicionar ou remover um arquivo em `variants/` já funciona sozinho (só precisa de um reload em dev; o build pega automaticamente).
+- **Continua BEM**: cada valor não-padrão de cada eixo é um **modificador** (`card--compact`, `card--highlight`) — nunca um bloco/classe nova. Ver "Convenção para novos componentes" acima pra regra geral de BEM.
+- `data-prop`/`data-prop-<atributo>` funcionam normalmente dentro de um bloco estrutural (`variants/variant/<valor>.html`) — o `BaseComponent` reaplica o valor certo sempre que troca de `variant`.
+- **Storybook**: cada eixo encontrado (via `readVariantAxes`/`parseVariantFiles`) vira um `select` próprio no painel Controls, automaticamente. `npm run generate:component` gera uma story por **valor não-padrão de cada eixo** (não por combinação — combinar dois eixos ao mesmo tempo já é possível ao vivo via Controls, sem precisar de uma story pronta pra cada cruzamento) e completa um `.stories.js` já existente com a story de um valor novo.
+- **Preview de dev** (`npm run dev`) mostra automaticamente **todas as combinações** do componente (ver "Preview automático de componentes" abaixo), quando o `.js` do componente já existe.
 
 ## Preview automático de componentes (modo dev)
 
@@ -144,6 +183,7 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Tudo é lido do disco a cada requisição — criar um componente novo, adicionar um `.css` em `src/styles/` ou editar `.html`/`.css` de um componente já reflete com um refresh na página, sem precisar reiniciar o `npm run dev`.
 - `vite.config.js` define `server.open: '__components'` pra abrir a página de lista automaticamente ao rodar `npm run dev`.
 - Se o `.html` do componente usa a tag de outro componente aninhado (composição), o preview injeta um `<script type="module">` carregando o `.js` de cada tag aninhada encontrada — sem isso, a tag apareceria "crua" (sem upgrade do Custom Element), já que este preview monta o Shadow DOM na mão, sem passar pelo `.js` do próprio componente sendo visualizado.
+- **Quando o componente tem `variants/` e o `.js` já existe**, o preview troca completamente de estratégia: em vez de montar o Shadow DOM na mão, ele carrega o `.js` **do próprio componente** (mesmo mecanismo do item acima) e estampa uma tag real por combinação de eixos (produto cartesiano, incluindo a combinação toda-padrão), cada uma rotulada (ex: `variant=compact`) — o navegador faz a composição de verdade via `BaseComponent`/`import.meta.glob`, sem duplicar essa lógica no plugin. Sem `variants/`, ou antes do `.js` existir, o comportamento continua sendo o de sempre (Shadow DOM montado na mão a partir do `.html`/`.css`). **Só enumera eixos de `variants/`** — um prop comum (`data-prop`, `data-prop-<atributo>`, `data-prop-modifier`) não entra nessa combinação automática, mesmo que mude a aparência do componente; pra ver esses casos, use o Storybook.
 - A página de preview também injeta `<base href="...">` no `<head>` — necessário porque essa rota vive níveis abaixo da raiz do site (`/__components/<nivel>/<nome>`); sem o `<base>`, um caminho relativo de imagem (`./assets/<funcao>/<arquivo>`, ver "Imagens em public/assets" abaixo) resolveria contra a URL do preview em vez da raiz, e quebraria — tanto pro componente sendo visualizado quanto pra um componente aninhado real dentro dele (que carrega seu `.html` original, sem nenhuma reescrita deste plugin).
 
 ## Geração automática de arquivos de componente
@@ -153,7 +193,8 @@ Não existe (nem precisa criar) um arquivo `.preview.html` por componente. Ao ro
 - Varre `src/components/<nivel>/positivus-<nome>/` procurando toda pasta que já tenha um `.html` (mesma lógica de `vite-plugins/positivus-dev-component-index.js`).
 - Pra cada componente encontrado, gera `positivus-<nome>.js`, `.stories.js` e `.test.js` a partir dos templates padrão (ver "Convenção para novos componentes" acima) — só os que ainda não existirem; nunca sobrescreve um arquivo já criado manualmente.
 - O teste gerado é mínimo (só confirma que a tag foi registrada via `customElements.get`) — não tenta adivinhar o conteúdo real do `.html`, que quem criou o componente pode complementar depois.
-- Pra cada componente com algum arquivo gerado, o comando já faz `git add` só desses arquivos novos e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
+- **Exceção ao "nunca sobrescreve"**: se o `.stories.js` já existir e a pasta `variants/` do componente tiver ganhado um valor novo desde a última vez que rodou, o comando **acrescenta** só a story daquele valor novo no fim do arquivo (procura por `export const <Nome>` — se já existir, não mexe em nada) — nunca toca no resto do arquivo nem apaga o que já estava lá. Rode `npm run generate:component` de novo depois de adicionar um arquivo em `variants/` a um componente que já existia pra pegar essa story automaticamente.
+- Pra cada componente com algum arquivo gerado ou `.stories.js` atualizado, o comando já faz `git add` só desse arquivo e cria um commit próprio, seguindo a convenção de commits do projeto: `feat: gera js, storybook e teste de positivus-<nome>` pra criação, `feat: adiciona story de variante em positivus-<nome>` pra story extra (sem escopo — commits gerados automaticamente por scripts não usam o escopo de nível/pasta, só commits feitos manualmente por uma pessoa). Não inclui o `.html`/`.css` do componente nesse commit — esses continuam sendo commitados por quem os criou, no momento que preferir.
 - Não gera e2e (Cypress) — por convenção, e2e testa o `index.html` real, não componentes isolados (ver seção "Testes" abaixo).
 - Não edita `src/main.js` nem `index.html` — os passos 6–7 da convenção continuam manuais.
 
@@ -181,27 +222,53 @@ Custom Elements se auto-atualizam onde aparecerem (inclusive dentro de Shadow DO
 
 ## Storybook
 
-Cada componente tem uma story co-localizada na sua própria pasta (`positivus-<nome>.stories.js`), obrigatória para todo componente novo (ver "Convenção para novos componentes" acima).
+Cada componente tem uma story co-localizada na sua própria pasta (`positivus-<nome>.stories.js`), obrigatória para todo componente novo (ver "Convenção para novos componentes" acima) — `npm run generate:component` já gera ela sozinha, no formato abaixo, então normalmente não precisa escrever isso à mão:
 
 ```js
 // src/components/molecules/positivus-example-card/positivus-example-card.stories.js
 import './positivus-example-card.js';
+import template from './positivus-example-card.html?raw';
+import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
+
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
 
 export default {
   title: 'Molecules/PositivusExampleCard', // agrupa por nível atômico: Atoms/Molecules/Organisms
   tags: ['autodocs'],
+  argTypes: argTypesFromTemplate(template, variantFiles), // um controle de texto pra cada data-prop, um select por eixo de variante
+  render: renderWithArgs('positivus-example-card'),
 };
 
 export const Default = {
-  render: () => document.createElement('positivus-example-card'),
+  args: {}, // vazio = usa o conteúdo padrão do próprio componente
+};
+
+export const CustomContent = {
+  args: {
+    title: 'Consultoria de SEO',
+    text: 'Aumente o tráfego orgânico do seu site com estratégias personalizadas.',
+  },
+};
+
+export const Compact = {
+  args: { variant: 'compact', title: 'Newsletter', text: 'Receba novidades por e-mail.' },
 };
 ```
 
 Regras:
 
-- `title` sempre no formato `<Nível>/<NomeDaClasse>` (ex: `Atoms/PositivusButton`), pra manter a navegação do Storybook alinhada com Atomic Design.
-- Como os componentes são Custom Elements nativos (sem Lit), o `render` de cada story cria o elemento via `document.createElement('positivus-<nome>')` e, se precisar passar props customizados, usa `el.setAttribute('nome', 'valor')` antes de retornar (ver "Props e composição de componentes" acima).
-- `.storybook/main.js` e `.storybook/preview.js` configuram o Storybook para usar o Vite (`@storybook/web-components-vite`) e carregar `reset.css` + `global.css` globalmente.
+- `title` sempre no formato `<Nível>/<NomeDaClasse>` (ex: `Atoms/PositivusButton`), pra manter a navegação do Storybook alinhada com Atomic Design — mesmo pra componente com variantes, já que continua sendo **um** componente só; as variantes viram stories extras (`Compact` acima), não pastas novas.
+- `src/components/storybook-helpers.js` centraliza a lógica que faz toda prop (`data-prop`) aparecer como um controle editável no painel **Controls** do Storybook, sem precisar listar cada prop à mão:
+  - `argTypesFromTemplate(template, variantFiles)` lê os nomes de prop do próprio template (`BaseComponent.extractPropNames`, a mesma leitura que `static observedAttributes` já faz) e devolve um `argTypes` com um controle `'text'` pra cada um — exceto cada eixo de variante encontrado em `variantFiles` (`variant`, e qualquer eixo de estilo adicional — ver "Variantes em arquivo" acima), que vira um controle `'select'` com os valores daquele eixo (`BaseComponent.parseVariantFiles`).
+  - `renderWithArgs(tagName)` devolve a função `render`: cria a tag e aplica cada `arg` como atributo (`setAttribute`) — o mesmo que quem usa o componente de verdade faria.
+  - Cada story então só declara `args` (os valores daquele exemplo específico) — editáveis ao vivo no painel Controls, sem precisar editar o código pra testar uma prop ou variante diferente.
+- `npm run generate:component` já gera uma story extra por **valor não-padrão de cada eixo de variante** (ver `scripts/generate-component-files.js`) — tanto pra componente novo quanto pra um `.stories.js` já existente (acrescenta só os valores que ainda não tiver, sem sobrescrever nada). O nome vem de `toPascalCase` do valor (ex: `Compact`, `Highlight`) — não gera uma story por combinação de dois eixos ao mesmo tempo (isso já dá pra fazer ao vivo no painel Controls). Se você já tiver criado uma story com outro nome pro mesmo valor (ex: um `AsButton` pra `variant="button"`), o comando não reconhece isso como "já coberta" e acrescenta a story `Button` mesmo assim; nesse caso, apague a duplicada que preferir manter.
+- Pra cada componente com prop's, pelo menos uma story além da `Default` deve demonstrar um valor customizado (ex: `CustomContent` acima) — ajuda quem for usar o componente a ver rapidamente que aceita props, mesmo sem abrir o painel Controls.
+- `.storybook/main.js` e `.storybook/preview.js` configuram o Storybook para usar o Vite (`@storybook/web-components-vite`) e carregar `reset.css` + `global.css` globalmente. O `stories` do `main.js` usa caminho **absoluto** (via `path.join` + `fileURLToPath`, normalizado pra `/`) em vez de `'../src/...'` relativo — necessário pra contornar um bug conhecido do `@storybook/builder-vite` quando o config fica numa subpasta (`.storybook/`) e o glob de stories sobe um nível (sintoma: `TypeError: importers[path] is not a function`, preview sempre em branco) — não trocar de volta pra caminho relativo.
 - `storybook-static/` (saída de `npm run build-storybook`) é ignorada no git, assim como `dist/`.
 
 ## Testes

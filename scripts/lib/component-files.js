@@ -17,12 +17,17 @@ export function listLevels(projectRoot) {
     .readdirSync(componentsDir)
     .filter((entry) =>
       fs.statSync(path.join(componentsDir, entry)).isDirectory(),
-    );
+    )
+    .sort();
 }
 
 /**
  * Varre src/components/<nivel>/positivus-<nome>/ procurando componentes que
  * já tenham o .html (mesmo padrão do vite-plugins/positivus-dev-component-index.js).
+ * Ordenado por nome — além de determinístico, isso faz uma família de
+ * variantes (positivus-x, positivus-x-compact...) aparecer sempre agrupada
+ * e em ordem no preview de dev (`npm run generate:composition-imports` e os
+ * outros scripts também dependem dessa mesma ordem pra rodar sempre igual).
  */
 export function findComponents(projectRoot) {
   const components = [];
@@ -30,7 +35,7 @@ export function findComponents(projectRoot) {
   for (const level of listLevels(projectRoot)) {
     const levelDir = path.join(projectRoot, COMPONENTS_ROOT, level);
 
-    for (const name of fs.readdirSync(levelDir)) {
+    for (const name of fs.readdirSync(levelDir).sort()) {
       const componentDir = path.join(levelDir, name);
       if (!fs.statSync(componentDir).isDirectory()) continue;
 
@@ -99,6 +104,57 @@ export function findComponentByTagName(components, tagName) {
 }
 
 /**
+ * Lê os eixos de variante de um componente a partir da pasta `variants/`
+ * dentro da pasta dele (cada subpasta é um eixo, cada `.html` dentro dela é
+ * um valor não-padrão) — usado pra gerar stories em
+ * `generate-component-files.js` e pro preview de dev mostrar todas as
+ * combinações. Mesma ideia de `BaseComponent.parseVariantFiles` (duplicada
+ * aqui de propósito: aquela roda no navegador a partir de
+ * `import.meta.glob`, essa aqui é leitura direta de disco em Node, sem nada
+ * em comum pra compartilhar de verdade). `values` sempre começa com
+ * `'default'` (não tem arquivo pra ele — é o próprio `.html` principal, ou
+ * "nenhuma classe extra", dependendo do eixo).
+ */
+export function readVariantAxes(componentDir) {
+  const variantsDir = path.join(componentDir, 'variants');
+  if (!fs.existsSync(variantsDir)) return [];
+
+  return fs
+    .readdirSync(variantsDir)
+    .filter((entry) => fs.statSync(path.join(variantsDir, entry)).isDirectory())
+    .sort((a, b) => {
+      if (a === 'variant') return -1;
+      if (b === 'variant') return 1;
+      return a.localeCompare(b);
+    })
+    .map((axisName) => {
+      const axisDir = path.join(variantsDir, axisName);
+      const values = fs
+        .readdirSync(axisDir)
+        .filter((file) => file.endsWith('.html'))
+        .map((file) => file.replace(/\.html$/, ''))
+        .sort();
+
+      return { name: axisName, values: ['default', ...values] };
+    });
+}
+
+/**
+ * Produto cartesiano dos valores de cada eixo — cada combinação vira
+ * `[{ axis, value }, ...]`, na mesma ordem dos eixos recebidos. Usado pelo
+ * preview de dev pra enumerar todas as combinações de variante a mostrar.
+ */
+export function cartesianProduct(axes) {
+  return axes.reduce(
+    (combos, axis) =>
+      combos.flatMap((combo) =>
+        axis.values.map((value) => [...combo, { axis: axis.name, value }]),
+      ),
+    [[]],
+  );
+}
+
+/**
  * Insere linhas de `import` novas logo depois do último `import` já
  * existente no conteúdo de um `.js` — usado tanto pra imports de imagem
  * quanto pra imports de composição (side-effect import de um componente
@@ -131,11 +187,17 @@ export function jsTemplate(name, className) {
 import template from './${name}.html?raw';
 import styles from './${name}.css?inline';
 
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
 export class ${className} extends BaseComponent {
-  static observedAttributes = BaseComponent.extractPropNames(template);
+  static observedAttributes = BaseComponent.extractPropNames(template, variantFiles);
 
   constructor() {
-    super({ template, styles });
+    super({ template, styles, variantFiles });
   }
 }
 

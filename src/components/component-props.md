@@ -20,8 +20,8 @@ só, e cobre qualquer atributo de qualquer elemento:
     class="card__image"
     src="./assets/illustrations/example.svg"
     alt="Ilustração do card de exemplo"
-    data-prop-src="image"
-    data-prop-alt="image-alt"
+    data-prop-src="src"
+    data-prop-alt="alt"
   />
   <h2 class="card__title" data-prop="title">Example Card</h2>
   <p class="card__text" data-prop="text">Este é um componente de exemplo.</p>
@@ -36,8 +36,8 @@ Storybook:
 <positivus-example-card
   title="Consultoria de SEO"
   text="Aumente o tráfego orgânico do seu site."
-  image="https://exemplo.com/foto-do-produto.png"
-  image-alt="Foto do produto"
+  src="https://exemplo.com/foto-do-produto.png"
+  alt="Foto do produto"
 ></positivus-example-card>
 
 <!-- sem passar nada, usa o conteúdo padrão do componente -->
@@ -108,6 +108,62 @@ booleano direito; existe uma terceira variante pra isso:
 usa `toggleAttribute` (adiciona ou remove o atributo de verdade), em vez de
 `setAttribute` — assim `is-disabled="false"` realmente tira o `disabled`.
 
+### `data-prop-modifier` — modificador de estilo (soma classe, não substitui)
+
+Nenhum dos marcadores acima resolve bem um caso comum: deixar o **estilo**
+de um elemento variar via prop, sem trocar HTML (isso já existe pra um
+conjunto fixo de valores conhecidos de antemão, ver "Variantes em arquivo"
+mais abaixo — mas às vezes você só quer aceitar qualquer string e virar
+classe na hora, sem precisar criar um arquivo por valor). Usar
+`data-prop-<atributo>` pra isso seria `data-prop-class="nome"` — **não
+faça isso**: `setAttribute('class', valor)` substitui a classe inteira,
+apagando a classe BEM que o CSS do componente depende dela pra estilizar.
+
+`data-prop-modifier="nome"` resolve isso direito — soma
+`<classe-base>--<valor>` na `classList` (`classList.add`, nunca
+`setAttribute`), sem apagar a classe base nem nenhuma outra já presente:
+
+```html
+<!-- positivus-example-card.html -->
+<div class="card" data-prop-modifier="appearance">...</div>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card appearance="highlight"></positivus-example-card>
+<!-- .card vira class="card card--highlight" -->
+```
+
+Pontos importantes:
+
+- **A classe-base é sempre a primeira classe já escrita no elemento**
+  (convenção BEM: o bloco vem primeiro, ex: `class="card"`) — não precisa
+  declarar ela em separado. Se o elemento não tiver **nenhuma** classe, o
+  `BaseComponent` lança um erro na hora (em vez de aplicar silenciosamente
+  uma classe `"undefined--valor"`) — ver `base-component.md`.
+- **Trocar de valor troca o modificador**, não acumula: passar
+  `appearance="dark"` depois de `appearance="highlight"` remove
+  `card--highlight` antes de somar `card--dark`. Nunca fica com os dois ao
+  mesmo tempo.
+- **Não aparece como `select` no Storybook**, nem entra na enumeração
+  automática do preview de dev (`/__components`, ver "Preview automático de
+  componentes" no `CLAUDE.md`) — diferente de um eixo de `variants/`, que
+  aparece nos dois. Como qualquer string vira uma classe válida, o controle
+  gerado no Storybook é um campo de texto livre, e o preview de dev só
+  mostra o valor padrão (mesma regra de qualquer `data-prop`/`data-prop-<atributo>`).
+  Prefira `variants/<eixo>/` (abaixo) quando os valores possíveis são
+  conhecidos de antemão e você quer que apareçam como opções prontas nos
+  dois lugares.
+
+### Apelido, não nome fixo
+
+O `nome` de `data-prop-<atributo>="nome"` **não precisa ser igual ao
+`<atributo>`** — `data-prop-href="link"` no exemplo acima expõe o `href`
+real do elemento sob o apelido `link`. Isso é o que permite dois elementos
+com o mesmo atributo real (ex: dois `<a href>`) virarem **props
+independentes**, cada um com seu próprio apelido: ver "Dois elementos com o
+mesmo nome de atributo" mais abaixo.
+
 **Limitações conhecidas** (ver detalhe em `base-component.md`): não dá pra
 passar conteúdo rico ou outro componente como "valor" de um prop (só
 string); não existe reatividade de formulário nem forma de levar dado de
@@ -158,11 +214,79 @@ automaticamente pelo `npm run dev`) já reconhece esse aninhamento sozinho,
 carregando o `.js` de cada componente usado ali dentro — não precisa de
 nenhum passo manual extra só pra visualizar.
 
+### Repassando prop pro componente aninhado
+
+`data-prop-<atributo>` também funciona numa tag de outro componente, não só
+em elementos HTML simples — o valor cai como atributo real na tag aninhada,
+que resolve o próprio prop dali (o `positivus-example-card` nem sabe que é
+um `positivus-button` do outro lado, só repassa um atributo):
+
+```html
+<!-- positivus-example-card.html -->
+<positivus-button
+  variant="button"
+  data-prop-text="button-text"
+  data-prop-link="button-link"
+></positivus-button>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card button-text="Contratar"></positivus-example-card>
+```
+
+`data-prop-text="nome"` é um caso normal de `data-prop-<atributo>` (aplica
+via `setAttribute('text', valor)`) — não confundir com `data-prop="nome"`
+(sem sufixo, vira `textContent`); são coisas diferentes mesmo quando o
+atributo de destino se chama `text`.
+
+### Dois elementos com o mesmo atributo real: apelido igual ou diferente
+
+O `nome` de `data-prop-<atributo>="nome"` é sempre um **apelido** — dois
+elementos que usam o mesmo atributo real (ex: dois `<a href>`) podem
+compartilhar o mesmo apelido de propósito (os dois recebem o valor juntos)
+ou usar apelidos diferentes (cada um vira um prop **independente**).
+
+Exemplo de verdade já no projeto — [`positivus-example-card`](./molecules/positivus-example-card/positivus-example-card.html)
+tem a imagem envolvida por um link e um link "Saiba mais" no fim do card,
+cada um com seu próprio apelido pro `href`:
+
+```html
+<a class="card__image-link" href="#" data-prop-href="image-href">
+  <img class="card__image" src="..." alt="..." data-prop-src="src" data-prop-alt="alt" />
+</a>
+...
+<a class="card__link" href="#" data-prop-href="href">Saiba mais</a>
+```
+
+```html
+<!-- uso: os dois links são independentes -->
+<positivus-example-card
+  href="https://exemplo.com/produto"
+  image-href="https://exemplo.com/produto/galeria"
+></positivus-example-card>
+```
+
+Se em vez disso os dois usassem o **mesmo** apelido (ex: os dois com
+`data-prop-href="href"`), o `BaseComponent` trataria os dois como o mesmo
+prop e aplicaria o valor recebido em **ambos** ao mesmo tempo — não no
+último encontrado apenas — útil quando de propósito os dois devem sempre
+apontar pro mesmo lugar.
+
 ## Variação visual (não é prop de conteúdo)
 
-Pra uma variação puramente visual (ex: `variant="secondary"` num botão), não
-use `data-prop` — isso é pra texto/imagem. Use um atributo simples + seletor
-de atributo no CSS do próprio componente:
+Pra uma variação puramente visual, o padrão do projeto é `data-prop-modifier`
+(ver seção acima) — soma `<classe-base>--<valor>` na `classList` sozinho, sem
+precisar escrever seletor nenhum, e já aparece como prop de verdade
+(`static observedAttributes`, controle no Storybook). Use isso por padrão
+pra qualquer variação de estilo sem estrutura diferente.
+
+### Caso raro: atributo simples + `:host([attr])` no CSS
+
+Só vale a pena fugir do `data-prop-modifier` quando você nem quer que o
+valor vire uma classe/prop de verdade — ex: um atributo que só existe pro
+CSS reagir, sem nenhum outro uso. Nesse caso (raro), um atributo simples +
+seletor de atributo no CSS do próprio componente também funciona:
 
 ```html
 <!-- uso -->
@@ -179,4 +303,176 @@ de atributo no CSS do próprio componente:
 
 Isso já é reativo sozinho (seletor de atributo do navegador atualiza a
 aparência automaticamente quando o atributo muda) — nenhuma mudança no
-`BaseComponent` precisa disso.
+`BaseComponent` precisa disso. Mas repare que, diferente de
+`data-prop-modifier`, esse atributo **não** é descoberto automaticamente
+por `extractPropNames`/Storybook — precisa declarar o controle à mão no
+`.stories.js` se quiser editá-lo pelo painel Controls.
+
+## Variantes em arquivo (`variants/<eixo>/<valor>.html`)
+
+Nenhuma das opções acima (`data-prop-modifier` ou `:host([attr])`) resolve
+quando a diferença é de **estrutura**, não só classe/estilo — pra isso, o
+componente ganha uma pasta `variants/` —
+uma subpasta por eixo, um arquivo por valor não-padrão daquele eixo (o
+valor padrão de qualquer eixo é sempre `'default'`, sem arquivo — é o
+próprio `.html` principal, ou "nenhuma classe extra"):
+
+```
+positivus-example-card/
+  positivus-example-card.html   ← default (imagem + título + texto)
+  positivus-example-card.css
+  positivus-example-card.js
+  variants/
+    variant/
+      compact.html               ← eixo estrutural: bloco completo (sem imagem)
+```
+
+```html
+<!-- positivus-example-card.html (default) -->
+<div class="card">
+  <img class="card__image" src="..." alt="..." data-prop-src="src" data-prop-alt="alt" />
+  <h2 class="card__title" data-prop="title">Example Card</h2>
+  <p class="card__text" data-prop="text">Este é um componente de exemplo.</p>
+</div>
+```
+
+```html
+<!-- variants/variant/compact.html -->
+<div class="card card--compact">
+  <h2 class="card__title" data-prop="title">Example Card</h2>
+  <p class="card__text" data-prop="text">Este é um componente de exemplo.</p>
+</div>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card variant="compact" title="Newsletter">
+</positivus-example-card>
+
+<!-- sem passar nada, usa o default do eixo -->
+<positivus-example-card></positivus-example-card>
+```
+
+`variant` é o **único eixo estrutural** — troca a estrutura inteira, tag e
+tudo. Um eixo **adicional** (estrutura à parte) funcionaria do mesmo jeito
+que `variant`, só que dentro de outra subpasta (ex: `variants/size/large.html`
+com só a classe `card--large`, mesma ideia de `variants/<eixo>/<valor>.html`
+descrita no início desta seção) — o `BaseComponent` soma a(s) classe(s) do
+elemento raiz daquele arquivo na `classList` do elemento raiz já
+renderizado, sem duplicar um arquivo por cruzamento com `variant`.
+
+O `positivus-example-card` de verdade **não tem** um segundo eixo em
+`variants/` hoje — o `appearance` (`highlight`) dele usa `data-prop-modifier`
+em vez de arquivo, já que só tem um valor não-padrão (ver "`data-prop-modifier`"
+acima); a sintaxe de uso (`appearance="highlight"`) é a mesma independente
+do mecanismo por trás, só muda o que fica escrito no `.html` do componente.
+
+Cada componente carrega isso com uma linha fixa no `.js` (nunca precisa ser
+mantida manualmente — funciona igual com 0 ou N arquivos em `variants/`):
+
+```js
+import { BaseComponent } from '../../base-component.js';
+import template from './positivus-example-card.html?raw';
+import styles from './positivus-example-card.css?inline';
+
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
+export class PositivusExampleCard extends BaseComponent {
+  static observedAttributes = BaseComponent.extractPropNames(template, variantFiles);
+
+  constructor() {
+    super({ template, styles, variantFiles });
+  }
+}
+
+customElements.define('positivus-example-card', PositivusExampleCard);
+```
+
+Pontos importantes:
+
+- **Continua BEM**: cada valor não-padrão de cada eixo é um **modificador**
+  (`card--compact`, `card--highlight`) — nunca um bloco/classe nova. Ver a
+  regra de BEM em [`CLAUDE.md`](../../CLAUDE.md).
+- **`data-prop` funciona normalmente dentro de um bloco de
+  `variants/variant/`** (ex: `title` no `compact.html` acima) — o
+  `BaseComponent` reaplica o valor certo toda vez que troca de `variant`,
+  então o prop funciona igual não importa qual está ativo.
+- Se passar um `variant`/eixo de estilo que não existe (ou sem arquivo
+  correspondente), cai no padrão daquele eixo — nunca quebra.
+- **Prefira no máximo ~2 eixos com poucos valores** — cada eixo de estilo é
+  livre (não duplica nada), mas se a variação for puramente cosmética,
+  `data-prop-modifier` (acima) resolve sem precisar de arquivo nenhum.
+
+## Storybook — props e variantes visíveis pro dev
+
+Todo `.stories.js` gerado por `npm run generate:component` já usa
+`src/components/storybook-helpers.js` pra deixar as props (e as variantes,
+se houver) editáveis direto no painel **Controls** do Storybook, sem
+precisar listar nada à mão. Quando o componente tem `variants/`, o gerador
+também já cria uma story pronta por valor não-padrão de cada eixo:
+
+```js
+import './positivus-example-card.js';
+import template from './positivus-example-card.html?raw';
+import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
+
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
+export default {
+  title: 'Molecules/PositivusExampleCard',
+  tags: ['autodocs'],
+  argTypes: argTypesFromTemplate(template, variantFiles),
+  render: renderWithArgs('positivus-example-card'),
+};
+
+export const Default = {
+  args: {},
+};
+
+export const CustomContent = {
+  args: { title: 'Consultoria de SEO', text: 'Aumente o tráfego...' },
+};
+
+export const Compact = {
+  args: { variant: 'compact', title: 'Newsletter', text: 'Receba novidades por e-mail.' },
+};
+```
+
+- `argTypesFromTemplate(template, variantFiles)` lê os
+  `data-prop`/`data-prop-<atributo>` do `.html` (mesma leitura que
+  `static observedAttributes` já faz) e gera um controle pra cada um —
+  texto pra prop normal (inclusive `data-prop-modifier`, como o `appearance`
+  do `positivus-example-card` — vira campo de texto livre, não `select`,
+  então não ganha uma story dedicada automaticamente: dá pra testar valores
+  diferentes ao vivo direto no painel Controls), um **seletor** (`select`)
+  por eixo de variante encontrado em `variantFiles` (`variant`, no exemplo)
+  — abra a story no Storybook, aba **Controls**, e dá pra editar/trocar de
+  variante (ou combinar com outros props) ao vivo, sem tocar em código.
+- `renderWithArgs(tagName)` aplica cada `args` como atributo na tag — o
+  mesmo que aconteceria numa página de verdade.
+- `npm run generate:component` gera o `.stories.js` inteiro só quando o
+  arquivo ainda não existe — mas se ele já existir e a pasta `variants/`
+  ganhar um valor novo depois, rodar o comando de novo **acrescenta** só a
+  story daquele valor (procura por `export const <Nome>`; se já existir uma
+  com esse nome exato, não faz nada). Nunca sobrescreve o resto do arquivo.
+  O nome vem de `toPascalCase` do valor (ex: `Compact`, `Large`) — não gera
+  uma story por combinação de dois eixos ao mesmo tempo (isso já dá pra
+  fazer ao vivo no painel Controls). Se você já tiver uma story com outro
+  nome cobrindo o mesmo valor, o comando não vai perceber e vai acrescentar
+  uma redundante; nesse caso, apague a que não quiser manter. Só considera
+  eixos que estão em `variants/` — um `data-prop-modifier` nunca ganha
+  story automática, mesmo que só tenha um valor não-padrão (vira prop
+  comum, editável via Controls, sem gerar nada sozinho).
+- O preview de desenvolvimento (`npm run dev`) também mostra **todas as
+  combinações** automaticamente, quando o `.js` do componente já existe —
+  ver "Preview automático de componentes" no [`CLAUDE.md`](../../CLAUDE.md).
+  Mesma ressalva: só combina eixos de `variants/`; um `data-prop-modifier`
+  não entra nessa enumeração, só aparece com o valor padrão.

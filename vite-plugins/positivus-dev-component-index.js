@@ -6,6 +6,8 @@ import {
   findComponentByTagName,
   extractNestedComponentTags,
   isLocalImageSrc,
+  readVariantAxes,
+  cartesianProduct,
 } from '../scripts/lib/component-files.js';
 
 const STYLES_ROOT = 'src/styles';
@@ -121,6 +123,38 @@ function buildNestedComponentScripts(markup, name, components) {
     .join('\n    ');
 }
 
+/**
+ * Quando o componente tem `variants/` e o `.js` já existe, o preview mostra
+ * uma tag real por combinação de eixos (produto cartesiano, incluindo a
+ * combinação toda-padrão) em vez do HTML/CSS montado na mão — o navegador
+ * faz a composição de verdade (`BaseComponent`/`import.meta.glob`), sem
+ * duplicar aqui a lógica de `variant`/eixos de estilo.
+ */
+function buildVariantsPreview(name, variantAxes) {
+  const items = cartesianProduct(variantAxes)
+    .map((combo) => {
+      const label = combo.map((entry) => `${entry.axis}=${entry.value}`).join(', ');
+      const attributes = combo
+        .filter((entry) => entry.value !== 'default')
+        .map((entry) => ` ${entry.axis}="${entry.value}"`)
+        .join('');
+
+      return `
+      <section class="preview-variant">
+        <h2 class="preview-variant__label">${label}</h2>
+        <${name}${attributes}></${name}>
+      </section>`;
+    })
+    .join('\n');
+
+  return `
+    <style>
+      .preview-variant { margin-bottom: 2rem; }
+      .preview-variant__label { font: 0.85rem monospace; color: #555; margin-bottom: 0.5rem; }
+    </style>
+    <div id="variants-preview">${items}</div>`;
+}
+
 function readStyle(projectRoot, fileName) {
   return fs.readFileSync(path.join(projectRoot, STYLES_ROOT, fileName), 'utf-8');
 }
@@ -178,15 +212,20 @@ function renderComponentPreview(projectRoot, base, level, name) {
     findComponents(projectRoot),
   );
 
-  return `<!doctype html>
-<html lang="pt-BR">
-  <head>
-    <base href="${base}" />
-    ${readIndexHeadHtml(projectRoot, `Preview: ${name}`)}
-    ${nestedComponentScripts}
-  </head>
-  <body>
-    <div id="preview-host"></div>
+  const variantAxes = readVariantAxes(componentDir);
+  const jsFile = path.join(componentDir, `${name}.js`);
+  const variantsPreview =
+    variantAxes.length > 0 && fs.existsSync(jsFile)
+      ? buildVariantsPreview(name, variantAxes)
+      : '';
+
+  const ownComponentScript = variantsPreview
+    ? `<script type="module" src="/src/components/${level}/${name}/${name}.js"></script>`
+    : '';
+
+  const body = variantsPreview
+    ? variantsPreview
+    : `<div id="preview-host"></div>
     <script>
       // Cria um Shadow DOM de verdade (igual o BaseComponent real) em vez de
       // colar o HTML numa div normal — assim a regra ":host { ... }" do CSS
@@ -201,7 +240,18 @@ function renderComponentPreview(projectRoot, base, level, name) {
       const template = document.createElement('template');
       template.innerHTML = ${JSON.stringify(rawMarkup)};
       shadow.append(template.content.cloneNode(true));
-    </script>
+    </script>`;
+
+  return `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <base href="${base}" />
+    ${readIndexHeadHtml(projectRoot, `Preview: ${name}`)}
+    ${nestedComponentScripts}
+    ${ownComponentScript}
+  </head>
+  <body>
+    ${body}
   </body>
 </html>
 `;

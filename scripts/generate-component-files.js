@@ -5,8 +5,10 @@ import { execFileSync } from 'node:child_process';
 import {
   findComponents,
   toClassName,
+  toPascalCase,
   toLevelTitle,
   jsTemplate,
+  readVariantAxes,
 } from './lib/component-files.js';
 
 const PROJECT_ROOT = path.resolve(
@@ -14,18 +16,60 @@ const PROJECT_ROOT = path.resolve(
   '..',
 );
 
-function storiesTemplate(name, className, levelTitle) {
+/**
+ * Valores não-padrão (tudo menos o primeiro, `'default'`) de cada eixo,
+ * junto com o nome do eixo — uma story por valor deixa evidente quais
+ * variantes existem, sem precisar abrir a pasta `variants/`. Combinar mais
+ * de um eixo ao mesmo tempo continua possível ao vivo no painel Controls
+ * do Storybook, só não gera uma story pronta por combinação (eixos de
+ * estilo compõem em runtime, não precisam de arquivo/story por
+ * cruzamento).
+ */
+function nonDefaultValues(axes) {
+  return axes.flatMap((axis) =>
+    axis.values.slice(1).map((value) => ({ axis: axis.name, value })),
+  );
+}
+
+function variantStoryBlock({ axis, value }) {
+  return `
+export const ${toPascalCase(value)} = {
+  args: { ${axis}: '${value}' },
+};
+`;
+}
+
+/**
+ * @param {{name: string, values: string[]}[]} variantAxes eixos achados em
+ * `variants/` (ver `readVariantAxes`) — uma story por valor não-padrão de
+ * cada eixo.
+ */
+function storiesTemplate(name, className, levelTitle, variantAxes) {
+  const variantStories = nonDefaultValues(variantAxes)
+    .map(variantStoryBlock)
+    .join('');
+
   return `import './${name}.js';
+import template from './${name}.html?raw';
+import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
+
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
 
 export default {
   title: '${levelTitle}/${className}',
   tags: ['autodocs'],
+  argTypes: argTypesFromTemplate(template, variantFiles),
+  render: renderWithArgs('${name}'),
 };
 
 export const Default = {
-  render: () => document.createElement('${name}'),
+  args: {},
 };
-`;
+${variantStories}`;
 }
 
 function testTemplate(name) {
@@ -44,12 +88,13 @@ function generateMissingFiles({ level, name }) {
   const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
   const className = toClassName(name);
   const levelTitle = toLevelTitle(level);
+  const variantAxes = readVariantAxes(componentDir);
 
   const files = [
     { file: `${name}.js`, content: jsTemplate(name, className) },
     {
       file: `${name}.stories.js`,
-      content: storiesTemplate(name, className, levelTitle),
+      content: storiesTemplate(name, className, levelTitle, variantAxes),
     },
     { file: `${name}.test.js`, content: testTemplate(name) },
   ];
@@ -70,11 +115,41 @@ function generateMissingFiles({ level, name }) {
   return createdFiles;
 }
 
-function commitCreatedFiles(createdFiles, { name }) {
-  if (createdFiles.length === 0) return;
+/**
+ * Componente que já tem `.stories.js` (então `generateMissingFiles` não
+ * mexeu nele) mas ganhou uma variante nova no `.html` — acrescenta só a(s)
+ * story(ies) que ainda não existirem, sem tocar no resto do arquivo (nunca
+ * sobrescreve uma story que já foi customizada à mão).
+ *
+ * @returns {string | null} caminho do .stories.js atualizado, ou null se nada mudou
+ */
+function addMissingVariantStories({ level, name }) {
+  const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
+  const storiesPath = path.join(componentDir, `${name}.stories.js`);
+  if (!fs.existsSync(storiesPath)) return null;
 
-  execFileSync('git', ['add', ...createdFiles], { cwd: PROJECT_ROOT });
-  const message = `feat: gera js, storybook e teste de ${name}`;
+  const values = nonDefaultValues(readVariantAxes(componentDir));
+  if (values.length === 0) return null;
+
+  const originalContent = fs.readFileSync(storiesPath, 'utf-8');
+  const missingValues = values.filter(
+    ({ value }) => !originalContent.includes(`export const ${toPascalCase(value)}`),
+  );
+  if (missingValues.length === 0) return null;
+
+  const updatedContent =
+    originalContent.trimEnd() + '\n' + missingValues.map(variantStoryBlock).join('');
+  fs.writeFileSync(storiesPath, updatedContent);
+  console.log(
+    `generate-component-files: atualizado ${path.relative(PROJECT_ROOT, storiesPath)} com ${missingValues.length} story(ies) de variante`,
+  );
+  return storiesPath;
+}
+
+function commitTouchedFiles(files, message) {
+  if (files.length === 0) return;
+
+  execFileSync('git', ['add', ...files], { cwd: PROJECT_ROOT });
   execFileSync('git', ['commit', '-m', message], { cwd: PROJECT_ROOT });
   console.log(`generate-component-files: commit criado — "${message}"`);
 }
@@ -88,7 +163,17 @@ function main() {
 
     try {
       const createdFiles = generateMissingFiles(component);
-      commitCreatedFiles(createdFiles, component);
+      commitTouchedFiles(
+        createdFiles,
+        `feat: gera js, storybook e teste de ${component.name}`,
+      );
+
+      const updatedStoriesFile = addMissingVariantStories(component);
+      commitTouchedFiles(
+        updatedStoriesFile ? [updatedStoriesFile] : [],
+        `feat: adiciona story de variante em ${component.name}`,
+      );
+
       console.log(`generate-component-files: ${label} ok`);
     } catch (error) {
       hasError = true;
