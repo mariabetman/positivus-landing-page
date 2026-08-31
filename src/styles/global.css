@@ -2,8 +2,18 @@
   /* colors */
   --green: #B9FF66;
   --black: #191A23;
-  --white: #F3F3F3;
+  --grey: #F3F3F3;
   
   /* desktop width */
-  --desktop-max-width: 1280px;
+  --desktop-max-width: 77.5rem;
+}
+
+.container {
+  padding: 1rem;
+  width: 100%;
+  max-width: var(--desktop-max-width);
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8.75rem;
 }

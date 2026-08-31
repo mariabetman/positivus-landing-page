@@ -1,9 +1,3 @@
-.logos {
-    margin: auto;
-    padding: 1rem;
-    max-width: 80rem;
-}
-
 .logos__list {
     display: flex;
     flex-direction: column;

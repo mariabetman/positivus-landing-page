@@ -1,1 +1,7 @@
 @import 'eric-meyer-reset/eric-meyer-reset.css';
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
