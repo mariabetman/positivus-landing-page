@@ -187,7 +187,7 @@ Qualquer componente pode receber texto/atributo customizado via atributo HTML, s
 ```
 
 - `data-prop="nome"` → vira o texto do elemento.
-- `data-prop-<atributo>="nome"` → vira aquele atributo do elemento (`src`, `href`, `alt`, `aria-label`, etc.).
+- `data-prop-<atributo>="nome"` → vira aquele atributo do elemento (`src`, `href`, `alt`, `aria-label`, etc.) — `nome` é um apelido, não precisa ser igual ao `<atributo>`.
 - `data-prop-toggle-<atributo>="nome"` → variante pra atributo booleano (`disabled`, `checked`...).
 - Nome do prop sempre em **kebab-case** (`is-disabled`, não `isDisabled`) — atributo HTML é case-insensitive.
 
@@ -197,14 +197,14 @@ Não tem sintaxe nova — escreva a tag normalmente dentro do `.html` de outro c
 
 ## Variantes de um componente (HTML diferente, não só CSS)
 
-Uma variação só de estilo usa atributo simples + `:host([variant="..."])` no CSS (ver [`component-props.md`](./src/components/component-props.md)). Quando a variante precisa de **HTML diferente**, marque cada versão com `data-variant="nome"` dentro do **mesmo** `.html` — o componente renderiza só o bloco da variante ativa (o primeiro `data-variant` encontrado é o padrão); os outros nunca chegam a existir no Shadow DOM. Exemplo de verdade já no projeto: [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.html), que tem um bloco `default` (com imagem) e um `compact` (só título/texto):
+Uma variação só de estilo tem duas opções, dependendo se os valores possíveis são conhecidos de antemão: atributo simples + `:host([tone="..."])` no CSS (qualquer valor, mas não vira classe sozinho), ou `data-prop-modifier="nome"` (qualquer valor vira `<classe-base>--<valor>` na `classList` sozinho, ver [`component-props.md`](./src/components/component-props.md)). Quando a variante precisa de **HTML diferente** de verdade, o componente ganha uma pasta `variants/<eixo>/<valor>.html` — `variant` é o único eixo que pode trocar a estrutura inteira; qualquer outro eixo é só uma classe modificadora (arquivo por valor, aparece como `select` no Storybook), e os dois combinam livremente em runtime. Exemplo de verdade já no projeto: [`positivus-example-card`](./src/components/molecules/positivus-example-card/positivus-example-card.html) — `.html` principal = default, `variants/variant/compact.html` troca a estrutura (sem imagem); já o `appearance` (`highlight`) usa `data-prop-modifier`, não `variants/`, já que só tem um valor não-padrão:
 
 ```html
-<positivus-example-card variant="compact" title="Newsletter" text="Receba novidades por e-mail.">
+<positivus-example-card variant="compact" appearance="highlight" title="Newsletter" text="Receba novidades por e-mail.">
 </positivus-example-card>
 ```
 
-Todas as variantes ficam juntas no mesmo arquivo (fácil de ver/editar todas de uma vez), e `npm run generate:component` já gera uma story por variante encontrada sozinho — inclusive pra um componente que já existia antes de ganhar `data-variant`: rode o comando de novo depois de adicionar a variante nova no `.html`, e ele acrescenta só a story que falta no `.stories.js` que já existe (ver o formato em `Compact`, no [`positivus-example-card.stories.js`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js)).
+Variantes estruturais (`variant`) ficam em `variants/variant/<valor>.html`, cada uma no seu próprio arquivo (fácil de achar/editar), e `npm run generate:component` já gera uma story por valor não-padrão sozinho — inclusive pra um componente que já existia antes de ganhar `variants/`: rode o comando de novo depois de adicionar um arquivo novo lá, e ele acrescenta só a story que falta no `.stories.js` que já existe (ver o formato em `Compact`, no [`positivus-example-card.stories.js`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js)). `npm run dev` também mostra todas as combinações automaticamente no preview do componente.
 
 ## Passo a passo: adicionando uma imagem a um componente
 
