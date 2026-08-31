@@ -13,15 +13,16 @@ globalStylesheet.replaceSync(global);
 
 const PROP_ATTRIBUTE_PATTERN = /data-prop(?:-[a-z-]+)?\s*=\s*["']([^"']+)["']/g;
 const PROP_DATA_ATTRIBUTE_PATTERN = /^data-prop(?:-toggle-(.+)|-(.+))?$/;
-const VARIANT_ATTRIBUTE_PATTERN = /data-variant(?:-([a-z-]+))?\s*=\s*["']([^"']+)["']/g;
+const VARIANT_FILE_PATTERN = /variants\/([a-z-]+)\/([a-z-]+)\.html$/;
 
 export class BaseComponent extends HTMLElement {
   #propBindings = new Map();
   #template = '';
-  #variantAxes = [];
+  #structuralVariants = {};
+  #styleAxes = {};
   #variantAxisNames = new Set();
 
-  constructor({ template = '', styles = '' } = {}) {
+  constructor({ template = '', styles = '', variantFiles = {} } = {}) {
     super();
     this.attachShadow({ mode: 'open' });
 
@@ -37,8 +38,16 @@ export class BaseComponent extends HTMLElement {
 
     if (template) {
       this.#template = template;
-      this.#variantAxes = BaseComponent.extractVariantAxes(template);
-      this.#variantAxisNames = new Set(this.#variantAxes.map((axis) => axis.name));
+
+      const { structuralVariants, styleAxes } =
+        BaseComponent.parseVariantFiles(variantFiles);
+      this.#structuralVariants = structuralVariants;
+      this.#styleAxes = styleAxes;
+      this.#variantAxisNames = new Set([
+        ...(Object.keys(structuralVariants).length > 0 ? ['variant'] : []),
+        ...Object.keys(styleAxes),
+      ]);
+
       this.#renderTemplate();
     }
   }
@@ -52,74 +61,102 @@ export class BaseComponent extends HTMLElement {
     this.#applyProp(name);
   }
 
+  /**
+   * Aplica o valor em **todos** os elementos ligados a esse nome de prop —
+   * normalmente só um, mas se mais de um elemento do componente usar o
+   * mesmo nome (por acidente, ou de propósito pra andarem juntos), os dois
+   * entram na lista e recebem o valor juntos, em vez de um sobrescrever o
+   * outro silenciosamente.
+   */
   #applyProp(name) {
     const value = this.getAttribute(name);
     if (value === null) return;
 
-    const binding = this.#propBindings.get(name);
-    if (!binding) return;
+    const bindings = this.#propBindings.get(name);
+    if (!bindings) return;
 
-    const { element, target, isToggle } = binding;
-    if (target === null) {
-      // Sem sufixo (data-prop="nome") — target null é o sinal de "sem
-      // atributo específico, é pra aplicar em textContent". Não pode ser a
-      // string 'text', porque daí um data-prop-text="nome" de verdade
-      // (querendo setAttribute('text', valor) num elemento que tem um
-      // atributo chamado "text") seria confundido com esse caso.
-      element.textContent = value;
-    } else if (isToggle) {
-      // Atributo booleano de HTML (disabled, checked, required...) é
-      // "verdadeiro" só por existir — setAttribute(target, 'false') ainda
-      // deixaria o atributo presente. toggleAttribute adiciona/remove de
-      // verdade, interpretando o valor como "true"/"false".
-      element.toggleAttribute(target, value === 'true');
-    } else {
-      element.setAttribute(target, value);
-    }
+    bindings.forEach((binding) => {
+      const { element, target, isToggle } = binding;
+      if (target === null) {
+        // Sem sufixo (data-prop="nome") — target null é o sinal de "sem
+        // atributo específico, é pra aplicar em textContent".
+        element.textContent = value;
+      } else if (target === 'modifier') {
+        // data-prop-modifier="nome" — soma `<classe-base>--<valor>` na
+        // classList (classList.add, nunca setAttribute('class', ...), que
+        // apagaria as outras classes do elemento). Remove o modificador
+        // aplicado da vez anterior antes de somar o novo, senão trocar de
+        // valor ficaria empilhando classe velha.
+        if (binding.appliedModifierClass) {
+          element.classList.remove(binding.appliedModifierClass);
+        }
+        const modifierClass = `${binding.baseClass}--${value}`;
+        element.classList.add(modifierClass);
+        binding.appliedModifierClass = modifierClass;
+      } else if (isToggle) {
+        // Atributo booleano de HTML (disabled, checked, required...) é
+        // "verdadeiro" só por existir — setAttribute(target, 'false') ainda
+        // deixaria o atributo presente. toggleAttribute adiciona/remove de
+        // verdade, interpretando o valor como "true"/"false".
+        element.toggleAttribute(target, value === 'true');
+      } else {
+        element.setAttribute(target, value);
+      }
+    });
   }
 
   /**
-   * Monta o Shadow DOM com só o bloco da variante ativa (quando o
-   * componente tem `data-variant`) e reaplica os props já definidos —
-   * necessário porque trocar de variante troca os elementos internos, então
-   * os bindings antigos (e qualquer valor já aplicado) deixam de existir.
+   * Monta o Shadow DOM com o bloco estrutural certo (`variant`), soma as
+   * classes dos eixos de estilo ativos e reaplica os props já definidos —
+   * necessário porque trocar de `variant` troca os elementos internos,
+   * então os bindings antigos (e qualquer valor já aplicado) deixam de
+   * existir.
    */
   #renderTemplate() {
-    this.shadowRoot.innerHTML = this.#selectVariantMarkup();
+    this.shadowRoot.innerHTML = this.#selectBaseMarkup();
+    this.#applyStyleAxisClasses();
     this.#bindProps();
-    this.#propBindings.forEach((_binding, name) => this.#applyProp(name));
+    this.#propBindings.forEach((_bindings, name) => this.#applyProp(name));
   }
 
   /**
-   * Sem `data-variant` no template, devolve ele inteiro (comportamento de
-   * sempre). Com `data-variant`, devolve só o HTML do bloco cujos atributos
-   * batem com o valor atual de **cada** eixo (`variant`, e qualquer
-   * `data-variant-<eixo>` adicional) — os outros blocos nunca chegam a
-   * entrar no DOM (não é esconder com CSS, é literalmente não renderizar).
-   * Se a combinação pedida não existir como bloco de verdade no `.html`
-   * (autor não escreveu aquele cruzamento), cai no primeiro bloco
-   * encontrado — mesma filosofia de fallback de um valor de eixo inválido.
+   * Sem variantes estruturais, devolve o template inteiro (comportamento de
+   * sempre). Com `variants/variant/<valor>.html`, devolve aquele bloco
+   * completo quando o atributo `variant` bate com um valor conhecido —
+   * senão cai no template padrão (mesmo fallback de um valor inválido).
    */
-  #selectVariantMarkup() {
-    if (this.#variantAxes.length === 0) return this.#template;
+  #selectBaseMarkup() {
+    const requested = this.getAttribute('variant');
+    if (requested && this.#structuralVariants[requested]) {
+      return this.#structuralVariants[requested];
+    }
 
-    const activeValues = this.#variantAxes.map(({ name, values }) => {
-      const requested = this.getAttribute(name);
-      return { name, value: values.includes(requested) ? requested : values[0] };
-    });
+    return this.#template;
+  }
 
-    const wrapper = document.createElement('template');
-    wrapper.innerHTML = this.#template;
-    const blocks = [...wrapper.content.querySelectorAll('[data-variant]')];
+  /**
+   * Pra cada eixo de estilo (`variants/<eixo>/<valor>.html`, eixo ≠
+   * `variant`), lê o atributo correspondente e — se houver um arquivo pra
+   * aquele valor — soma as classes do elemento raiz daquele arquivo na
+   * `classList` do elemento raiz já renderizado. É assim que `variant` e N
+   * eixos de estilo combinam livremente, sem precisar de um bloco HTML por
+   * combinação: cada eixo de estilo só acrescenta classe, nunca troca
+   * estrutura.
+   */
+  #applyStyleAxisClasses() {
+    const root = this.shadowRoot.firstElementChild;
+    if (!root) return;
 
-    const match = blocks.find((block) =>
-      activeValues.every(({ name, value }) => {
-        const attribute = name === 'variant' ? 'data-variant' : `data-variant-${name}`;
-        return block.getAttribute(attribute) === value;
-      }),
-    );
+    for (const [axisName, values] of Object.entries(this.#styleAxes)) {
+      const requested = this.getAttribute(axisName);
+      const fragment = requested ? values[requested] : undefined;
+      if (!fragment) continue;
 
-    return (match ?? blocks[0])?.outerHTML ?? this.#template;
+      const wrapper = document.createElement('template');
+      wrapper.innerHTML = fragment;
+      const modifierRoot = wrapper.content.firstElementChild;
+      if (modifierRoot) root.classList.add(...modifierRoot.classList);
+    }
   }
 
   /**
@@ -131,71 +168,110 @@ export class BaseComponent extends HTMLElement {
    * `data-prop-toggle-<atributo>="nome"` é a variante pra atributo
    * booleano (`disabled`, `checked`, `required`...): o valor "true"/"false"
    * decide se o atributo existe ou não, em vez de virar o texto dele.
+   * `data-prop-modifier="nome"` é a variante pra **modificador de estilo**:
+   * soma `<classe-base>--<valor>` na `classList` do elemento (a classe-base
+   * é sempre a primeira classe já escrita nele, convenção BEM de bloco
+   * vindo primeiro) — não é `data-prop-class`, que substituiria a classe
+   * inteira; aqui é sempre soma, nunca troca as outras classes do elemento.
+   *
+   * Cada nome de prop guarda uma **lista** de bindings, não um só — se dois
+   * elementos do componente usarem o mesmo nome (por acidente, ou de
+   * propósito pra andarem juntos), os dois entram na lista e recebem o
+   * mesmo valor juntos (ver `#applyProp`).
    */
   #bindProps() {
     this.#propBindings = new Map();
+
+    const addBinding = (name, binding) => {
+      if (!this.#propBindings.has(name)) this.#propBindings.set(name, []);
+      this.#propBindings.get(name).push(binding);
+    };
+
     this.shadowRoot.querySelectorAll('*').forEach((element) => {
       for (const attribute of element.attributes) {
         const match = PROP_DATA_ATTRIBUTE_PATTERN.exec(attribute.name);
         if (!match) continue;
 
         const [, toggleTarget, target] = match;
-        const binding = toggleTarget
-          ? { element, target: toggleTarget, isToggle: true }
-          : { element, target: target ?? null, isToggle: false };
-        this.#propBindings.set(attribute.value, binding);
+        let binding;
+        if (toggleTarget) {
+          binding = { element, target: toggleTarget, isToggle: true };
+        } else if (target === 'modifier') {
+          const baseClass = element.classList[0];
+          if (!baseClass) {
+            // Sem classe base pra prefixar, a classe aplicada viraria a
+            // string literal "undefined--<valor>" — falha rápido aqui, em
+            // vez de deixar esse bug vazar silenciosamente pro CSS.
+            throw new Error(
+              `data-prop-modifier="${attribute.value}": o elemento marcado precisa ter pelo menos uma classe (nenhuma encontrada).`,
+            );
+          }
+          binding = { element, target: 'modifier', baseClass };
+        } else {
+          binding = { element, target: target ?? null, isToggle: false };
+        }
+        addBinding(attribute.value, binding);
       }
     });
   }
 
   /**
-   * Lê os nomes de prop (`data-prop`/`data-prop-<atributo>`) presentes num
-   * template — usado por cada componente pra declarar
-   * `static observedAttributes`, já que esse getter é obrigatório pro
-   * navegador saber quais atributos observar e chamar
-   * `attributeChangedCallback`. Quando o template tem `data-variant`,
-   * inclui também o nome de cada eixo de variante encontrado (`variant`, e
-   * qualquer `data-variant-<eixo>` adicional) — são os atributos que
-   * decidem qual bloco renderizar, então também precisam ser observados.
+   * Lê os nomes de prop (`data-prop`/`data-prop-<atributo>`) presentes no
+   * template padrão e em cada bloco estrutural de `variantFiles` — usado
+   * por cada componente pra declarar `static observedAttributes`, já que
+   * esse getter é obrigatório pro navegador saber quais atributos observar
+   * e chamar `attributeChangedCallback`. Inclui também `variant` (se houver
+   * variante estrutural) e o nome de cada eixo de estilo encontrado — são
+   * os atributos que decidem o que renderizar, então também precisam ser
+   * observados.
    */
-  static extractPropNames(template) {
+  static extractPropNames(template, variantFiles = {}) {
+    const { structuralVariants, styleAxes } =
+      BaseComponent.parseVariantFiles(variantFiles);
+
+    const sources = [template, ...Object.values(structuralVariants)];
     const propNames = [
       ...new Set(
-        [...template.matchAll(PROP_ATTRIBUTE_PATTERN)].map(
-          (match) => match[1],
+        sources.flatMap((source) =>
+          [...source.matchAll(PROP_ATTRIBUTE_PATTERN)].map(
+            (match) => match[1],
+          ),
         ),
       ),
     ];
 
-    BaseComponent.extractVariantAxes(template).forEach(({ name }) => {
-      propNames.push(name);
-    });
+    if (Object.keys(structuralVariants).length > 0) propNames.push('variant');
+    propNames.push(...Object.keys(styleAxes));
 
     return propNames;
   }
 
   /**
-   * Lê os eixos de variante (`data-variant`/`data-variant-<eixo>`)
-   * presentes num template, agrupados por eixo — `variant` pro `data-variant`
-   * sem sufixo, ou o próprio sufixo pra `data-variant-<eixo>`. Pra cada
-   * eixo, `values` fica na ordem em que aparece no template — o primeiro
-   * valor é o padrão daquele eixo, usado quando a tag não recebe (ou
-   * recebe um valor inválido em) esse atributo.
+   * Agrupa o resultado de `import.meta.glob('./variants/**\/*.html', { eager:
+   * true, query: '?raw', import: 'default' })` por eixo, a partir do
+   * caminho de cada arquivo (`./variants/<eixo>/<valor>.html`). O eixo
+   * `variant` é o único estrutural (bloco HTML completo, substitui o
+   * template inteiro); qualquer outro eixo é de estilo (o arquivo carrega
+   * só a classe modificadora a somar no elemento raiz já renderizado).
    */
-  static extractVariantAxes(template) {
-    const axes = new Map();
+  static parseVariantFiles(variantFiles) {
+    const structuralVariants = {};
+    const styleAxes = {};
 
-    for (const [, axisSuffix, value] of template.matchAll(
-      VARIANT_ATTRIBUTE_PATTERN,
-    )) {
-      const axisName = axisSuffix ?? 'variant';
-      if (!axes.has(axisName)) axes.set(axisName, []);
+    for (const [path, content] of Object.entries(variantFiles)) {
+      const match = path.match(VARIANT_FILE_PATTERN);
+      if (!match) continue;
 
-      const values = axes.get(axisName);
-      if (!values.includes(value)) values.push(value);
+      const [, axisName, value] = match;
+      if (axisName === 'variant') {
+        structuralVariants[value] = content;
+      } else {
+        styleAxes[axisName] ??= {};
+        styleAxes[axisName][value] = content;
+      }
     }
 
-    return [...axes.entries()].map(([name, values]) => ({ name, values }));
+    return { structuralVariants, styleAxes };
   }
 
   #adoptStylesheet(cssText) {

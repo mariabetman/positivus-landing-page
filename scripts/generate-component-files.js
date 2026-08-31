@@ -8,7 +8,7 @@ import {
   toPascalCase,
   toLevelTitle,
   jsTemplate,
-  extractVariantAxes,
+  readVariantAxes,
 } from './lib/component-files.js';
 
 const PROJECT_ROOT = path.resolve(
@@ -17,56 +17,35 @@ const PROJECT_ROOT = path.resolve(
 );
 
 /**
- * Produto cartesiano dos valores de cada eixo — cada combinação vira
- * `[{ axis, value }, ...]`, na mesma ordem dos eixos recebidos.
+ * Valores não-padrão (tudo menos o primeiro, `'default'`) de cada eixo,
+ * junto com o nome do eixo — uma story por valor deixa evidente quais
+ * variantes existem, sem precisar abrir a pasta `variants/`. Combinar mais
+ * de um eixo ao mesmo tempo continua possível ao vivo no painel Controls
+ * do Storybook, só não gera uma story pronta por combinação (eixos de
+ * estilo compõem em runtime, não precisam de arquivo/story por
+ * cruzamento).
  */
-function cartesianProduct(axes) {
-  return axes.reduce(
-    (combos, axis) =>
-      combos.flatMap((combo) =>
-        axis.values.map((value) => [...combo, { axis: axis.name, value }]),
-      ),
-    [[]],
+function nonDefaultValues(axes) {
+  return axes.flatMap((axis) =>
+    axis.values.slice(1).map((value) => ({ axis: axis.name, value })),
   );
 }
 
-/**
- * Combinações que têm pelo menos um eixo fora do valor padrão (o primeiro
- * valor daquele eixo) — a combinação "tudo padrão" já é a story `Default`.
- * Cada combinação devolvida só carrega os eixos não-padrão daquela
- * combinação (os outros ficam de fora dos `args`, deixando o próprio
- * componente cair no padrão de cada eixo, igual já acontece hoje pra um
- * eixo só).
- */
-function nonDefaultCombos(axes) {
-  return cartesianProduct(axes)
-    .map((combo) =>
-      combo.filter((entry, index) => entry.value !== axes[index].values[0]),
-    )
-    .filter((combo) => combo.length > 0);
-}
-
-function variantStoryBlock(combo) {
-  const name = combo.map((entry) => toPascalCase(entry.value)).join('');
-  const args = combo
-    .map((entry) => `${entry.axis}: '${entry.value}'`)
-    .join(', ');
-
+function variantStoryBlock({ axis, value }) {
   return `
-export const ${name} = {
-  args: { ${args} },
+export const ${toPascalCase(value)} = {
+  args: { ${axis}: '${value}' },
 };
 `;
 }
 
 /**
- * @param {{name: string, values: string[]}[]} variantAxes eixos de
- * `data-variant`/`data-variant-<eixo>` achados no .html — uma story por
- * combinação não-toda-padrão deixa evidente quais variantes existem, sem
- * precisar abrir o `.html`.
+ * @param {{name: string, values: string[]}[]} variantAxes eixos achados em
+ * `variants/` (ver `readVariantAxes`) — uma story por valor não-padrão de
+ * cada eixo.
  */
 function storiesTemplate(name, className, levelTitle, variantAxes) {
-  const variantStories = nonDefaultCombos(variantAxes)
+  const variantStories = nonDefaultValues(variantAxes)
     .map(variantStoryBlock)
     .join('');
 
@@ -74,10 +53,16 @@ function storiesTemplate(name, className, levelTitle, variantAxes) {
 import template from './${name}.html?raw';
 import { argTypesFromTemplate, renderWithArgs } from '../../storybook-helpers.js';
 
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
 export default {
   title: '${levelTitle}/${className}',
   tags: ['autodocs'],
-  argTypes: argTypesFromTemplate(template),
+  argTypes: argTypesFromTemplate(template, variantFiles),
   render: renderWithArgs('${name}'),
 };
 
@@ -103,11 +88,7 @@ function generateMissingFiles({ level, name }) {
   const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
   const className = toClassName(name);
   const levelTitle = toLevelTitle(level);
-  const htmlContent = fs.readFileSync(
-    path.join(componentDir, `${name}.html`),
-    'utf-8',
-  );
-  const variantAxes = extractVariantAxes(htmlContent);
+  const variantAxes = readVariantAxes(componentDir);
 
   const files = [
     { file: `${name}.js`, content: jsTemplate(name, className) },
@@ -147,27 +128,20 @@ function addMissingVariantStories({ level, name }) {
   const storiesPath = path.join(componentDir, `${name}.stories.js`);
   if (!fs.existsSync(storiesPath)) return null;
 
-  const htmlContent = fs.readFileSync(
-    path.join(componentDir, `${name}.html`),
-    'utf-8',
-  );
-  const combos = nonDefaultCombos(extractVariantAxes(htmlContent));
-  if (combos.length === 0) return null;
+  const values = nonDefaultValues(readVariantAxes(componentDir));
+  if (values.length === 0) return null;
 
   const originalContent = fs.readFileSync(storiesPath, 'utf-8');
-  const missingCombos = combos.filter(
-    (combo) =>
-      !originalContent.includes(
-        `export const ${combo.map((entry) => toPascalCase(entry.value)).join('')}`,
-      ),
+  const missingValues = values.filter(
+    ({ value }) => !originalContent.includes(`export const ${toPascalCase(value)}`),
   );
-  if (missingCombos.length === 0) return null;
+  if (missingValues.length === 0) return null;
 
   const updatedContent =
-    originalContent.trimEnd() + '\n' + missingCombos.map(variantStoryBlock).join('');
+    originalContent.trimEnd() + '\n' + missingValues.map(variantStoryBlock).join('');
   fs.writeFileSync(storiesPath, updatedContent);
   console.log(
-    `generate-component-files: atualizado ${path.relative(PROJECT_ROOT, storiesPath)} com ${missingCombos.length} story(ies) de variante`,
+    `generate-component-files: atualizado ${path.relative(PROJECT_ROOT, storiesPath)} com ${missingValues.length} story(ies) de variante`,
   );
   return storiesPath;
 }

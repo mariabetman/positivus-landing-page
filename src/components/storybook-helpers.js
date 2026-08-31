@@ -5,21 +5,34 @@ import { BaseComponent } from './base-component.js';
  * do componente (mesma leitura que `static observedAttributes` já faz) —
  * assim toda prop já aparece editável no painel de Controls do Storybook,
  * sem precisar listar cada uma à mão em cada `.stories.js`. Cada eixo de
- * variante encontrado (`variant`, e qualquer `data-variant-<eixo>`
- * adicional — já incluídos em `extractPropNames`) vira um seletor com os
- * valores daquele eixo, em vez de um campo de texto livre.
+ * variante encontrado em `variantFiles` (`variant`, e qualquer eixo de
+ * estilo adicional — já incluídos em `extractPropNames`) vira um seletor
+ * com os valores daquele eixo, em vez de um campo de texto livre.
  */
-export function argTypesFromTemplate(template) {
+export function argTypesFromTemplate(template, variantFiles = {}) {
   const argTypes = Object.fromEntries(
-    BaseComponent.extractPropNames(template).map((name) => [
+    BaseComponent.extractPropNames(template, variantFiles).map((name) => [
       name,
       { control: 'text' },
     ]),
   );
 
-  BaseComponent.extractVariantAxes(template).forEach(({ name, values }) => {
-    argTypes[name] = { control: 'select', options: values };
-  });
+  const { structuralVariants, styleAxes } =
+    BaseComponent.parseVariantFiles(variantFiles);
+
+  if (Object.keys(structuralVariants).length > 0) {
+    argTypes.variant = {
+      control: 'select',
+      options: ['default', ...Object.keys(structuralVariants)],
+    };
+  }
+
+  for (const [axisName, values] of Object.entries(styleAxes)) {
+    argTypes[axisName] = {
+      control: 'select',
+      options: ['default', ...Object.keys(values)],
+    };
+  }
 
   return argTypes;
 }

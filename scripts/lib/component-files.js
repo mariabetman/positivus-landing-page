@@ -103,31 +103,55 @@ export function findComponentByTagName(components, tagName) {
   return components.find((component) => component.name === tagName);
 }
 
-const VARIANT_ATTRIBUTE_PATTERN = /data-variant(?:-([a-z-]+))?\s*=\s*["']([^"']+)["']/g;
+/**
+ * Lê os eixos de variante de um componente a partir da pasta `variants/`
+ * dentro da pasta dele (cada subpasta é um eixo, cada `.html` dentro dela é
+ * um valor não-padrão) — usado pra gerar stories em
+ * `generate-component-files.js` e pro preview de dev mostrar todas as
+ * combinações. Mesma ideia de `BaseComponent.parseVariantFiles` (duplicada
+ * aqui de propósito: aquela roda no navegador a partir de
+ * `import.meta.glob`, essa aqui é leitura direta de disco em Node, sem nada
+ * em comum pra compartilhar de verdade). `values` sempre começa com
+ * `'default'` (não tem arquivo pra ele — é o próprio `.html` principal, ou
+ * "nenhuma classe extra", dependendo do eixo).
+ */
+export function readVariantAxes(componentDir) {
+  const variantsDir = path.join(componentDir, 'variants');
+  if (!fs.existsSync(variantsDir)) return [];
+
+  return fs
+    .readdirSync(variantsDir)
+    .filter((entry) => fs.statSync(path.join(variantsDir, entry)).isDirectory())
+    .sort((a, b) => {
+      if (a === 'variant') return -1;
+      if (b === 'variant') return 1;
+      return a.localeCompare(b);
+    })
+    .map((axisName) => {
+      const axisDir = path.join(variantsDir, axisName);
+      const values = fs
+        .readdirSync(axisDir)
+        .filter((file) => file.endsWith('.html'))
+        .map((file) => file.replace(/\.html$/, ''))
+        .sort();
+
+      return { name: axisName, values: ['default', ...values] };
+    });
+}
 
 /**
- * Lê os eixos de `data-variant`/`data-variant-<eixo>` presentes no `.html`
- * de um componente, agrupados por eixo, com os valores na ordem em que
- * aparecem (o primeiro é o padrão daquele eixo) — usado pra gerar uma
- * story por combinação em `generate-component-files.js`. Mesma regra de
- * `BaseComponent.extractVariantAxes` (duplicada aqui de propósito: aquela
- * roda no navegador, essa aqui é só leitura de arquivo em Node, sem nada
- * em comum pra compartilhar de verdade).
+ * Produto cartesiano dos valores de cada eixo — cada combinação vira
+ * `[{ axis, value }, ...]`, na mesma ordem dos eixos recebidos. Usado pelo
+ * preview de dev pra enumerar todas as combinações de variante a mostrar.
  */
-export function extractVariantAxes(htmlContent) {
-  const axes = new Map();
-
-  for (const [, axisSuffix, value] of htmlContent.matchAll(
-    VARIANT_ATTRIBUTE_PATTERN,
-  )) {
-    const axisName = axisSuffix ?? 'variant';
-    if (!axes.has(axisName)) axes.set(axisName, []);
-
-    const values = axes.get(axisName);
-    if (!values.includes(value)) values.push(value);
-  }
-
-  return [...axes.entries()].map(([name, values]) => ({ name, values }));
+export function cartesianProduct(axes) {
+  return axes.reduce(
+    (combos, axis) =>
+      combos.flatMap((combo) =>
+        axis.values.map((value) => [...combo, { axis: axis.name, value }]),
+      ),
+    [[]],
+  );
 }
 
 /**
@@ -163,11 +187,17 @@ export function jsTemplate(name, className) {
 import template from './${name}.html?raw';
 import styles from './${name}.css?inline';
 
+const variantFiles = import.meta.glob('./variants/**/*.html', {
+  eager: true,
+  query: '?raw',
+  import: 'default',
+});
+
 export class ${className} extends BaseComponent {
-  static observedAttributes = BaseComponent.extractPropNames(template);
+  static observedAttributes = BaseComponent.extractPropNames(template, variantFiles);
 
   constructor() {
-    super({ template, styles });
+    super({ template, styles, variantFiles });
   }
 }
 
