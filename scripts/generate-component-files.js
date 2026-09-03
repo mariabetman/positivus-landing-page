@@ -84,8 +84,8 @@ describe('${name}', () => {
 `;
 }
 
-function generateMissingFiles({ level, name }) {
-  const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
+export function generateMissingFiles(projectRoot, { level, name }) {
+  const componentDir = path.join(projectRoot, 'src/components', level, name);
   const className = toClassName(name);
   const levelTitle = toLevelTitle(level);
   const variantAxes = readVariantAxes(componentDir);
@@ -123,8 +123,8 @@ function generateMissingFiles({ level, name }) {
  *
  * @returns {string | null} caminho do .stories.js atualizado, ou null se nada mudou
  */
-function addMissingVariantStories({ level, name }) {
-  const componentDir = path.join(PROJECT_ROOT, 'src/components', level, name);
+export function addMissingVariantStories(projectRoot, { level, name }) {
+  const componentDir = path.join(projectRoot, 'src/components', level, name);
   const storiesPath = path.join(componentDir, `${name}.stories.js`);
   if (!fs.existsSync(storiesPath)) return null;
 
@@ -162,13 +162,13 @@ function main() {
     const label = `${component.level}/${component.name}`;
 
     try {
-      const createdFiles = generateMissingFiles(component);
+      const createdFiles = generateMissingFiles(PROJECT_ROOT, component);
       commitTouchedFiles(
         createdFiles,
         `feat: gera js, storybook e teste de ${component.name}`,
       );
 
-      const updatedStoriesFile = addMissingVariantStories(component);
+      const updatedStoriesFile = addMissingVariantStories(PROJECT_ROOT, component);
       commitTouchedFiles(
         updatedStoriesFile ? [updatedStoriesFile] : [],
         `feat: adiciona story de variante em ${component.name}`,
@@ -185,15 +185,22 @@ function main() {
   return hasError;
 }
 
-try {
-  const hasError = main();
-  if (hasError) {
+// Só roda o CLI (varredura + escrita + commit de todo componente) quando o
+// arquivo é executado direto (`npm run generate:component`) — evita que só
+// importar `generateMissingFiles`/`addMissingVariantStories` de outro lugar
+// (ver `vite-plugins/positivus-dev-component-index.js`) dispare esse
+// processo inteiro como efeito colateral do import.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  try {
+    const hasError = main();
+    if (hasError) {
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(
+      'generate-component-files: falhou ao gerar arquivos do componente',
+    );
+    console.error(error);
     process.exit(1);
   }
-} catch (error) {
-  console.error(
-    'generate-component-files: falhou ao gerar arquivos do componente',
-  );
-  console.error(error);
-  process.exit(1);
 }

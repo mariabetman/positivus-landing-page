@@ -37,14 +37,17 @@ Atalhos para `this.shadowRoot.querySelector`/`querySelectorAll` — evitam repet
 - `data-prop="nome"` (sem sufixo) → aplica o valor em `textContent` do elemento.
 - `data-prop-<atributo>="nome"` (com sufixo) → aplica o valor via `setAttribute('<atributo>', valor)` — funciona pra `src`, `alt`, `href`, `aria-label`, ou qualquer outro atributo padrão de HTML, sem o `BaseComponent` precisar conhecer o tipo do elemento.
 - `data-prop-toggle-<atributo>="nome"` → variante pra atributo **booleano** (`disabled`, `checked`, `required`, `hidden`...): aplica via `toggleAttribute('<atributo>', valor === 'true')`, decidindo se o atributo existe ou não — diferente do `data-prop-<atributo>` normal, que só seta o valor (e não resolveria booleano certo, ver "Limitações conhecidas" abaixo).
-- `data-prop-modifier="nome"` → variante pra **modificador de estilo BEM**: em vez de `setAttribute`, soma `<classe-base>--<valor>` na `classList` do elemento via `classList.add` — nunca substitui a classe inteira (diferente de um hipotético `data-prop-class`, que apagaria a classe base junto). A classe-base é sempre a **primeira** classe já escrita no elemento. Trocar de valor remove o modificador aplicado da vez anterior antes de somar o novo, então não acumula (`card--highlight` → `card--dark`, nunca os dois ao mesmo tempo).
+- `data-prop-modifier="nome"` → variante pra **modificador de estilo BEM**: em vez de `setAttribute`, soma `<classe-base>--<valor>` na `classList` do elemento via `classList.add` — nunca substitui a classe inteira. A classe-base é sempre a **primeira** classe já escrita no elemento.
+- `data-prop-class="nome"` → parecido com `data-prop-modifier`, mas **sem prefixo nenhum**: soma a(s) classe(s) livre(s), do jeito que vier, via `classList.add` — não exige que o elemento já tenha uma classe base (não tem nada pra prefixar). Use quando quem consome o componente deve poder somar classe(s) arbitrária(s) (ex: utilitárias) sem seguir convenção de modificador BEM nenhuma.
+
+Os dois (`data-prop-modifier` e `data-prop-class`) aceitam mais de um token separado por espaço (`"highlight dark"` → soma dois modificadores/classes de uma vez), igual um atributo `class` normal — e sempre removem **todos** os valores aplicados da vez anterior antes de somar os novos, então trocar de valor não acumula.
 
 ```html
 <img class="card__image" src="..." data-prop-src="src" data-prop-alt="alt" />
 <a class="card__link" href="#" data-prop-href="link">Saiba mais</a>
 <h2 class="card__title" data-prop="title">Example Card</h2>
 <button class="card__button" data-prop-toggle-disabled="is-disabled">Enviar</button>
-<div class="card" data-prop-modifier="appearance">...</div>
+<div class="card" data-prop-modifier="appearance" data-prop-class="extra-class">...</div>
 ```
 
 ```html
@@ -74,8 +77,7 @@ export class PositivusExampleCard extends BaseComponent {
 - **Cada nome de prop guarda uma lista de elementos, não um só**: se dois elementos do mesmo componente usarem o mesmo apelido (por acidente, ou de propósito), os dois são tratados como o mesmo prop e recebem o valor juntos — nunca um sobrescreve o outro silenciosamente. Se a intenção era ter valores independentes, a saída é dar apelidos diferentes a cada um (ver acima).
 
 **Limitações conhecidas** (nenhuma bloqueia o uso atual do projeto, mas vale saber):
-- **Nunca use `data-prop-class="nome"`** — não existe tratamento especial pra `class` como atributo comum, então cairia no `setAttribute('class', valor)` normal, que **substitui** a classe inteira do elemento (apagando a classe BEM que o CSS do componente depende). Pra somar uma classe sem apagar as outras, use `data-prop-modifier` acima.
-- **`data-prop-modifier` exige que o elemento já tenha uma classe** — a classe-base vem de `element.classList[0]`; se o elemento marcado não tiver nenhuma classe escrita, o `BaseComponent` lança um erro na hora (`#bindProps`), em vez de aplicar silenciosamente uma classe `"undefined--valor"`. Os outros marcadores (`data-prop`, `data-prop-<atributo>`, `data-prop-toggle-<atributo>`) não têm esse risco — o alvo deles sempre vem de um grupo obrigatório do regex sobre o **nome do atributo**, nunca de uma propriedade do DOM que possa faltar.
+- **`data-prop-modifier` exige que o elemento já tenha uma classe** — a classe-base vem de `element.classList[0]`; se o elemento marcado não tiver nenhuma classe escrita, o `BaseComponent` lança um erro na hora (`#bindProps`), em vez de aplicar silenciosamente uma classe `"undefined--valor"`. `data-prop-class` não tem esse problema (não precisa de classe-base pra prefixar nada). Os marcadores sem `classList` (`data-prop`, `data-prop-<atributo>`, `data-prop-toggle-<atributo>`) também não têm esse risco — o alvo deles sempre vem de um grupo obrigatório do regex sobre o **nome do atributo**, nunca de uma propriedade do DOM que possa faltar.
 - **Conteúdo rico ou outro componente como "valor"** (não uma string) não é coberto por `data-prop` — um atributo HTML só carrega texto. Pra isso, a única forma seria slot (mecanismo descartado neste projeto, ver `component-props.md`).
 - **Reatividade de formulário** (`value`/`checked` de `<input>`, que representam o estado *atual*, não só o padrão) tende a exigir a propriedade do DOM em vez de `setAttribute` — não é um caso usado no projeto ainda. Também não existe hoje nenhuma forma de levar dado de dentro do componente pra fora (ex: o que o usuário digitou) — isso exigiria eventos customizados (`dispatchEvent`), um mecanismo diferente do `data-prop` (que só leva dado de fora pra dentro).
 

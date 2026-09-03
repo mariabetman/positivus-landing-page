@@ -17,7 +17,8 @@
     "cypress:run": "cypress run",
     "e2e": "start-server-and-test dev http://localhost:5173/positivus-landing-page/ cypress:run",
     "generate:component": "node scripts/generate-component-files.js",
-    "generate:composition-imports": "node scripts/generate-component-composition-imports.js"
+    "generate:composition-imports": "node scripts/generate-component-composition-imports.js",
+    "generate:style-modifier": "node scripts/generate-style-modifier.js"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
