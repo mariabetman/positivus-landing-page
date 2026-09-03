@@ -7,6 +7,7 @@ import {
   extractNestedComponentTags,
   isLocalImageSrc,
   readVariantAxes,
+  readModifierAxes,
   cartesianProduct,
 } from '../scripts/lib/component-files.js';
 
@@ -124,14 +125,16 @@ function buildNestedComponentScripts(markup, name, components) {
 }
 
 /**
- * Quando o componente tem `variants/` e o `.js` já existe, o preview mostra
- * uma tag real por combinação de eixos (produto cartesiano, incluindo a
- * combinação toda-padrão) em vez do HTML/CSS montado na mão — o navegador
- * faz a composição de verdade (`BaseComponent`/`import.meta.glob`), sem
- * duplicar aqui a lógica de `variant`/eixos de estilo.
+ * Quando o componente tem eixos pra combinar (`variants/`, e/ou algum
+ * `data-prop-modifier` com valor já escrito no CSS — ver `readModifierAxes`)
+ * e o `.js` já existe, o preview mostra uma tag real por combinação de eixos
+ * (produto cartesiano, incluindo a combinação toda-padrão) em vez do
+ * HTML/CSS montado na mão — o navegador faz a composição de verdade
+ * (`BaseComponent`/`import.meta.glob`), sem duplicar aqui nenhuma lógica de
+ * `variant`/eixo de estilo/modificador.
  */
-function buildVariantsPreview(name, variantAxes) {
-  const items = cartesianProduct(variantAxes)
+function buildVariantsPreview(name, axes) {
+  const items = cartesianProduct(axes)
     .map((combo) => {
       const label = combo.map((entry) => `${entry.axis}=${entry.value}`).join(', ');
       const attributes = combo
@@ -212,13 +215,15 @@ function renderComponentPreview(projectRoot, base, level, name) {
     findComponents(projectRoot),
   );
 
-  const variantAxes = readVariantAxes(componentDir);
+  const axes = [...readVariantAxes(componentDir), ...readModifierAxes(componentDir, name)];
   const jsFile = path.join(componentDir, `${name}.js`);
+  const jsExists = fs.existsSync(jsFile);
   const variantsPreview =
-    variantAxes.length > 0 && fs.existsSync(jsFile)
-      ? buildVariantsPreview(name, variantAxes)
-      : '';
+    axes.length > 0 && jsExists ? buildVariantsPreview(name, axes) : '';
 
+  // Carrega o .js real só quando existe combinação pra mostrar — sem eixo
+  // nenhum, o preview cai no fallback (Shadow DOM montado na mão), que não
+  // precisa do componente de verdade.
   const ownComponentScript = variantsPreview
     ? `<script type="module" src="/src/components/${level}/${name}/${name}.js"></script>`
     : '';

@@ -114,10 +114,12 @@ Nenhum dos marcadores acima resolve bem um caso comum: deixar o **estilo**
 de um elemento variar via prop, sem trocar HTML (isso já existe pra um
 conjunto fixo de valores conhecidos de antemão, ver "Variantes em arquivo"
 mais abaixo — mas às vezes você só quer aceitar qualquer string e virar
-classe na hora, sem precisar criar um arquivo por valor). Usar
-`data-prop-<atributo>` pra isso seria `data-prop-class="nome"` — **não
-faça isso**: `setAttribute('class', valor)` substitui a classe inteira,
-apagando a classe BEM que o CSS do componente depende dela pra estilizar.
+classe na hora, sem precisar criar um arquivo por valor). Um `data-prop-<atributo>`
+comum não serve pra isso: `data-prop-class="nome"` faria `setAttribute('class',
+valor)`, que substitui a classe inteira, apagando a classe BEM que o CSS do
+componente depende dela pra estilizar — por isso `data-prop-class` tem um
+tratamento especial à parte, igual `data-prop-modifier` (ver subseção
+própria mais abaixo).
 
 `data-prop-modifier="nome"` resolve isso direito — soma
 `<classe-base>--<valor>` na `classList` (`classList.add`, nunca
@@ -132,6 +134,10 @@ apagando a classe BEM que o CSS do componente depende dela pra estilizar.
 <!-- uso -->
 <positivus-example-card appearance="highlight"></positivus-example-card>
 <!-- .card vira class="card card--highlight" -->
+
+<!-- mais de um valor, separado por espaço, igual um atributo class normal -->
+<positivus-example-card appearance="highlight dark"></positivus-example-card>
+<!-- .card vira class="card card--highlight card--dark" -->
 ```
 
 Pontos importantes:
@@ -141,10 +147,14 @@ Pontos importantes:
   declarar ela em separado. Se o elemento não tiver **nenhuma** classe, o
   `BaseComponent` lança um erro na hora (em vez de aplicar silenciosamente
   uma classe `"undefined--valor"`) — ver `base-component.md`.
-- **Trocar de valor troca o modificador**, não acumula: passar
+- **O valor aceita mais de um token separado por espaço** — cada um vira
+  seu próprio modificador (`"highlight dark"` → `card--highlight` **e**
+  `card--dark`), igual um `class` normal aceitaria.
+- **Trocar de valor troca o(s) modificador(es)**, não acumula: passar
   `appearance="dark"` depois de `appearance="highlight"` remove
-  `card--highlight` antes de somar `card--dark`. Nunca fica com os dois ao
-  mesmo tempo.
+  `card--highlight` antes de somar `card--dark`. O `BaseComponent` sempre
+  remove **todos** os modificadores aplicados da vez anterior antes de
+  somar os novos.
 - **Não aparece como `select` no Storybook**, nem entra na enumeração
   automática do preview de dev (`/__components`, ver "Preview automático de
   componentes" no `CLAUDE.md`) — diferente de um eixo de `variants/`, que
@@ -154,6 +164,31 @@ Pontos importantes:
   Prefira `variants/<eixo>/` (abaixo) quando os valores possíveis são
   conhecidos de antemão e você quer que apareçam como opções prontas nos
   dois lugares.
+
+### `data-prop-class` — classe(s) livre(s), sem prefixo nenhum
+
+Parecido com `data-prop-modifier`, mas sem a convenção de modificador BEM:
+soma a(s) classe(s) exatamente como vier, via `classList.add` (nunca
+`setAttribute('class', ...)`). Use quando quem consome o componente deve
+poder somar classe(s) arbitrária(s) — ex: utilitárias de espaçamento —, não
+uma variação de estilo do próprio componente:
+
+```html
+<!-- positivus-example-card.html -->
+<div class="card" data-prop-class="extra-class">...</div>
+```
+
+```html
+<!-- uso -->
+<positivus-example-card extra-class="u-mt-2 u-text-center"></positivus-example-card>
+<!-- .card vira class="card u-mt-2 u-text-center" -->
+```
+
+Diferente de `data-prop-modifier`, **não exige que o elemento já tenha uma
+classe** — como não tem prefixo pra montar, não precisa de classe-base
+nenhuma. Fora isso, funciona igual: aceita mais de um valor separado por
+espaço, e trocar de valor remove as classes aplicadas da vez anterior antes
+de somar as novas.
 
 ### Apelido, não nome fixo
 
@@ -474,5 +509,27 @@ export const Compact = {
 - O preview de desenvolvimento (`npm run dev`) também mostra **todas as
   combinações** automaticamente, quando o `.js` do componente já existe —
   ver "Preview automático de componentes" no [`CLAUDE.md`](../../CLAUDE.md).
-  Mesma ressalva: só combina eixos de `variants/`; um `data-prop-modifier`
-  não entra nessa enumeração, só aparece com o valor padrão.
+  Isso inclui os valores de `data-prop-modifier` que já têm CSS escrito (ver
+  "Criar um novo valor de `data-prop-modifier`" abaixo) — só `data-prop-class`
+  fica de fora (não tem valor fixo pra enumerar, aceita classe livre).
+
+## Criar um novo valor de `data-prop-modifier`
+
+Pra criar um valor novo de um modificador já existente (ex: mais um valor
+de `appearance` no `positivus-example-card`, além de `highlight`), rode:
+
+```bash
+npm run generate:style-modifier -- positivus-example-card appearance dark
+```
+
+- Acha o elemento marcado com `data-prop-modifier="appearance"` no `.html`
+  do componente, pega a classe-base dele (`card`) e acrescenta a regra
+  `.card--dark { }` (vazia, pronta pra você preencher) no fim do `.css` do
+  componente — só se essa regra ainda não existir (não sobrescreve nada já
+  escrito).
+- Depois de rodar, escreva o CSS de verdade dentro da regra criada e rode
+  `npm run dev`: o preview passa a mostrar essa combinação automaticamente,
+  junto com as de `variants/` (ver "Preview automático de componentes" no
+  [`CLAUDE.md`](../../CLAUDE.md)) — sem precisar de nenhum arquivo à parte
+  (tipo JSON) descrevendo o valor: o próprio `.css` já é a única fonte de
+  verdade.

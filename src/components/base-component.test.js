@@ -119,6 +119,21 @@ class ModifierWithoutClassFixture extends BaseComponent {
 
 customElements.define('modifier-without-class-fixture', ModifierWithoutClassFixture);
 
+// data-prop-class="nome" — soma classe(s) livres via classList.add, sem
+// prefixo nenhum (diferente de data-prop-modifier) — funciona mesmo num
+// elemento sem nenhuma classe base, já que não precisa prefixar nada.
+const freeClassFixtureTemplate = `<div data-prop-class="extra-class">Conteúdo</div>`;
+
+class FreeClassFixture extends BaseComponent {
+  static observedAttributes = BaseComponent.extractPropNames(freeClassFixtureTemplate);
+
+  constructor() {
+    super({ template: freeClassFixtureTemplate });
+  }
+}
+
+customElements.define('free-class-fixture', FreeClassFixture);
+
 // Dois elementos com o mesmo nome de prop (href), de propósito — os dois
 // são tratados como o mesmo prop e devem atualizar juntos (ver
 // #applyProp/#bindProps).
@@ -359,6 +374,35 @@ describe('BaseComponent', () => {
     el.remove();
   });
 
+  it('data-prop-modifier aceita mais de um valor separado por espaço, cada um virando um modificador', () => {
+    const el = document.createElement('modifier-fixture');
+    el.setAttribute('tone', 'highlight dark');
+    document.body.append(el);
+
+    const div = el.shadowRoot.querySelector('.modifier-fixture');
+    expect(div.classList.contains('modifier-fixture')).toBe(true);
+    expect(div.classList.contains('modifier-fixture--highlight')).toBe(true);
+    expect(div.classList.contains('modifier-fixture--dark')).toBe(true);
+
+    el.remove();
+  });
+
+  it('troca de vários modificadores pra um só sem deixar nenhum antigo pra trás', () => {
+    const el = document.createElement('modifier-fixture');
+    el.setAttribute('tone', 'highlight dark');
+    document.body.append(el);
+
+    el.setAttribute('tone', 'muted');
+
+    const div = el.shadowRoot.querySelector('.modifier-fixture');
+    expect(div.classList.contains('modifier-fixture--highlight')).toBe(false);
+    expect(div.classList.contains('modifier-fixture--dark')).toBe(false);
+    expect(div.classList.contains('modifier-fixture--muted')).toBe(true);
+    expect(div.classList.contains('modifier-fixture')).toBe(true);
+
+    el.remove();
+  });
+
   it('falha rápido se o elemento marcado com data-prop-modifier não tem nenhuma classe', () => {
     // `new` direto (em vez de document.createElement) porque o upgrade via
     // Custom Elements só "reporta" uma exceção do constructor (como um erro
@@ -367,6 +411,33 @@ describe('BaseComponent', () => {
     expect(() => new ModifierWithoutClassFixture()).toThrow(
       /precisa ter pelo menos uma classe/,
     );
+  });
+
+  it('data-prop-class soma classe(s) livres via classList.add, mesmo sem classe base nenhuma', () => {
+    const el = document.createElement('free-class-fixture');
+    el.setAttribute('extra-class', 'u-mt-2 u-text-center');
+    document.body.append(el);
+
+    const div = el.shadowRoot.querySelector('div');
+    expect(div.classList.contains('u-mt-2')).toBe(true);
+    expect(div.classList.contains('u-text-center')).toBe(true);
+
+    el.remove();
+  });
+
+  it('data-prop-class troca de classes sem deixar as antigas pra trás', () => {
+    const el = document.createElement('free-class-fixture');
+    el.setAttribute('extra-class', 'u-mt-2 u-text-center');
+    document.body.append(el);
+
+    el.setAttribute('extra-class', 'u-hidden');
+
+    const div = el.shadowRoot.querySelector('div');
+    expect(div.classList.contains('u-mt-2')).toBe(false);
+    expect(div.classList.contains('u-text-center')).toBe(false);
+    expect(div.classList.contains('u-hidden')).toBe(true);
+
+    el.remove();
   });
 
   it('atualiza todos os elementos que compartilham o mesmo nome de atributo, em vez de um sobrescrever o outro', () => {

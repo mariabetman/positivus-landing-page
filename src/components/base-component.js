@@ -84,15 +84,34 @@ export class BaseComponent extends HTMLElement {
       } else if (target === 'modifier') {
         // data-prop-modifier="nome" — soma `<classe-base>--<valor>` na
         // classList (classList.add, nunca setAttribute('class', ...), que
-        // apagaria as outras classes do elemento). Remove o modificador
-        // aplicado da vez anterior antes de somar o novo, senão trocar de
-        // valor ficaria empilhando classe velha.
-        if (binding.appliedModifierClass) {
-          element.classList.remove(binding.appliedModifierClass);
+        // apagaria as outras classes do elemento). O valor aceita mais de
+        // um token separado por espaço (ex: "highlight dark"), igual um
+        // atributo class normal — cada um vira um modificador próprio
+        // (`card--highlight`, `card--dark`). Remove os modificadores
+        // aplicados da vez anterior antes de somar os novos, senão trocar
+        // de valor ficaria empilhando classe velha.
+        if (binding.appliedModifierClasses) {
+          element.classList.remove(...binding.appliedModifierClasses);
         }
-        const modifierClass = `${binding.baseClass}--${value}`;
-        element.classList.add(modifierClass);
-        binding.appliedModifierClass = modifierClass;
+        const modifierClasses = value
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((token) => `${binding.baseClass}--${token}`);
+        element.classList.add(...modifierClasses);
+        binding.appliedModifierClasses = modifierClasses;
+      } else if (target === 'class') {
+        // data-prop-class="nome" — soma classe(s) livres, sem prefixo/
+        // convenção nenhuma (diferente de data-prop-modifier, que sempre
+        // prefixa com a classe-base) — via classList.add, nunca
+        // setAttribute('class', ...), que apagaria as classes já
+        // existentes do elemento. Aceita mais de um token separado por
+        // espaço, igual um `class` normal.
+        if (binding.appliedClasses) {
+          element.classList.remove(...binding.appliedClasses);
+        }
+        const classes = value.split(/\s+/).filter(Boolean);
+        element.classList.add(...classes);
+        binding.appliedClasses = classes;
       } else if (isToggle) {
         // Atributo booleano de HTML (disabled, checked, required...) é
         // "verdadeiro" só por existir — setAttribute(target, 'false') ainda
@@ -171,8 +190,12 @@ export class BaseComponent extends HTMLElement {
    * `data-prop-modifier="nome"` é a variante pra **modificador de estilo**:
    * soma `<classe-base>--<valor>` na `classList` do elemento (a classe-base
    * é sempre a primeira classe já escrita nele, convenção BEM de bloco
-   * vindo primeiro) — não é `data-prop-class`, que substituiria a classe
-   * inteira; aqui é sempre soma, nunca troca as outras classes do elemento.
+   * vindo primeiro). `data-prop-class="nome"` é parecido, mas sem prefixo
+   * nenhum — soma a(s) classe(s) livre(s) do jeito que vier, sem exigir
+   * que o elemento já tenha uma classe base. Os dois usam `classList.add`,
+   * nunca `setAttribute('class', ...)` (que apagaria as classes já
+   * presentes), e aceitam mais de um token separado por espaço (ex:
+   * "highlight dark"), igual um atributo `class` normal.
    *
    * Cada nome de prop guarda uma **lista** de bindings, não um só — se dois
    * elementos do componente usarem o mesmo nome (por acidente, ou de
@@ -207,6 +230,8 @@ export class BaseComponent extends HTMLElement {
             );
           }
           binding = { element, target: 'modifier', baseClass };
+        } else if (target === 'class') {
+          binding = { element, target: 'class' };
         } else {
           binding = { element, target: target ?? null, isToggle: false };
         }

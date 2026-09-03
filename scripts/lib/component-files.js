@@ -139,6 +139,97 @@ export function readVariantAxes(componentDir) {
     });
 }
 
+function escapeRegExp(string) {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Acha, no `.html` de um componente, o elemento marcado com
+ * `data-prop-modifier="<propName>"` e devolve a classe-base dele (a
+ * primeira classe já escrita nele) — mesma regra que `BaseComponent#bindProps`
+ * usa em runtime (`element.classList[0]`), só que lendo o texto do `.html`
+ * direto (Node), sem precisar montar nenhum DOM de verdade. Usado tanto por
+ * `readModifierAxes` (preview de dev) quanto por `generate-style-modifier.js`
+ * (pra saber onde escrever a regra CSS nova). Devolve `null` se não achar o
+ * elemento ou se ele não tiver nenhuma classe.
+ */
+export function findModifierBaseClass(html, propName) {
+  const tagPattern = new RegExp(
+    `<[a-zA-Z][^>]*\\sdata-prop-modifier=["']${escapeRegExp(propName)}["'][^>]*>`,
+  );
+  const tagMatch = html.match(tagPattern);
+  if (!tagMatch) return null;
+
+  const classMatch = tagMatch[0].match(/\sclass=["']([^"']+)["']/);
+  if (!classMatch) return null;
+
+  return classMatch[1].split(/\s+/)[0];
+}
+
+/**
+ * Lê os eixos de `data-prop-modifier` de um componente que **já têm CSS
+ * escrito** — pra cada `data-prop-modifier="<prop>"` achado no `.html`, acha
+ * a classe-base (`findModifierBaseClass`) e procura no `.css` regras
+ * exatamente `.<classe-base>--<valor>` (ignora seletor composto, tipo
+ * `.card--compact .card__title`, que não é o modificador em si). Espelha
+ * `readVariantAxes` (mesmo formato de retorno, mesma leitura direta de
+ * disco) — não duplica nada do `BaseComponent`, que não faz esse tipo de
+ * leitura de CSS (só aplica a classe, nunca precisa descobrir valor).
+ * `data-prop-modifier` sem nenhuma regra de CSS ainda fica de fora do
+ * resultado (ver `npm run generate:style-modifier`, em `CLAUDE.md`, pra
+ * criar a primeira regra de um valor novo).
+ *
+ * Exclui qualquer valor que já seja um valor do eixo estrutural `variant`
+ * (`readVariantAxes`) do mesmo componente — um bloco de
+ * `variants/variant/<valor>.html` pode ter uma classe raiz `card--<valor>`
+ * só por convenção BEM (ex: `card--compact`), sem ter nenhuma relação com
+ * `data-prop-modifier`; sem essa exclusão, esse valor apareceria duas vezes
+ * no preview (uma como `variant=compact`, outra como
+ * `appearance=compact`), o que seria enganoso.
+ */
+export function readModifierAxes(componentDir, name) {
+  const htmlFile = path.join(componentDir, `${name}.html`);
+  const cssFile = path.join(componentDir, `${name}.css`);
+  if (!fs.existsSync(htmlFile) || !fs.existsSync(cssFile)) return [];
+
+  const html = fs.readFileSync(htmlFile, 'utf-8');
+  const css = fs.readFileSync(cssFile, 'utf-8');
+
+  const structuralVariantValues = new Set(
+    readVariantAxes(componentDir).find((axis) => axis.name === 'variant')
+      ?.values ?? [],
+  );
+
+  const propNames = new Set(
+    [...html.matchAll(/data-prop-modifier=["']([^"']+)["']/g)].map(
+      (match) => match[1],
+    ),
+  );
+
+  const axes = [];
+  for (const propName of propNames) {
+    const baseClass = findModifierBaseClass(html, propName);
+    if (!baseClass) continue;
+
+    const rulePattern = new RegExp(
+      `\\.${escapeRegExp(baseClass)}--([a-zA-Z0-9_-]+)(?=\\s*[,{])`,
+      'g',
+    );
+    const values = [
+      ...new Set(
+        [...css.matchAll(rulePattern)]
+          .map((match) => match[1])
+          .filter((value) => !structuralVariantValues.has(value)),
+      ),
+    ].sort();
+    if (values.length === 0) continue;
+
+    axes.push({ name: propName, values: ['default', ...values] });
+  }
+
+  return axes.sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /**
  * Produto cartesiano dos valores de cada eixo — cada combinação vira
  * `[{ axis, value }, ...]`, na mesma ordem dos eixos recebidos. Usado pelo
