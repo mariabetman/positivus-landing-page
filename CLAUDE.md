@@ -29,6 +29,7 @@ npm run cypress:open     # abre o Cypress interativo (precisa do `npm run dev` j
 npm run generate:component     # gera .js/.stories.js/.test.js de componentes novos
 npm run generate:composition-imports # gera o import de componentes usados dentro de outro (ou na index.html)
 npm run generate:style-modifier -- <positivus-nome> <prop> <valor> # cria a regra CSS de um novo valor de data-prop-modifier
+npm run remove:style-modifier -- <positivus-nome> <prop> [valor] [--force] # remove um (ou todos) os valores de data-prop-modifier
 ```
 
 ## Estrutura de pastas
@@ -225,12 +226,25 @@ Custom Elements se auto-atualizam onde aparecerem (inclusive dentro de Shadow DO
 
 `npm run generate:style-modifier -- <positivus-nome> <prop> <valor>` (roda `scripts/generate-style-modifier.js`) cria a regra CSS de um novo valor de `data-prop-modifier`, ex: `npm run generate:style-modifier -- positivus-example-card appearance dark`. Comando manual, independente dos outros:
 
-- Lê o `.html` do componente, acha o elemento marcado com `data-prop-modifier="<prop>"` e pega a classe-base dele (a primeira classe já escrita nele — mesma regra que `BaseComponent`/`#bindProps` usa em runtime, ver `base-component.md`).
+- Lê o `.html` padrão do componente **e** cada bloco de `variants/variant/<valor>.html` (o `data-prop-modifier` pode estar marcado só dentro de uma variante estrutural, não no padrão), acha o elemento marcado com `data-prop-modifier="<prop>"` e pega a classe-base dele (a primeira classe já escrita nele — mesma regra que `BaseComponent`/`#bindProps` usa em runtime, ver `base-component.md`).
 - Acrescenta `.<classe-base>--<valor> { }` (regra vazia, pronta pra preencher) no fim do `.css` do componente — só se essa regra ainda não existir (nunca sobrescreve uma já escrita).
 - Depois de rodar, quem criou o valor escreve o CSS de verdade dentro da regra — o comando só cria o "gancho", não decide nenhum estilo.
-- Falha com uma mensagem clara (sem alterar nada) se o componente não existir, ou se não achar nenhum elemento com `data-prop-modifier="<prop>"` no `.html` dele.
+- Falha com uma mensagem clara (sem alterar nada) se o componente não existir, ou se não achar nenhum elemento com `data-prop-modifier="<prop>"` (no `.html` padrão nem em `variants/variant/`).
 - Mesma regra de commit dos outros scripts: `feat: adiciona modificador de estilo <valor> em positivus-<nome>`, sem escopo.
 - É o que alimenta o preview automático de `data-prop-modifier` (ver "Preview automático de componentes" acima) — assim que a regra CSS existe (mesmo vazia), o valor já aparece como mais uma combinação no preview de dev, sem precisar de nenhum arquivo à parte descrevendo o valor.
+
+`npm run remove:style-modifier -- <positivus-nome> <prop> [valor] [--force]` (roda `scripts/remove-style-modifier.js`) é a contraparte que remove — sem `valor`, remove **todos** os valores já gerados daquele prop de uma vez:
+
+```bash
+npm run remove:style-modifier -- positivus-example-card appearance dark   # remove só .card--dark
+npm run remove:style-modifier -- positivus-example-card appearance       # remove todos os valores de appearance
+```
+
+- Mesma busca de classe-base que o comando de criar (`.html` padrão + `variants/variant/`).
+- **Recusa remover uma regra que já tenha CSS de verdade escrito dentro** (não só `{ }` vazia) — avisa quais regras têm conteúdo e pede a flag `--force` pra remover mesmo assim. Sem isso, seria fácil apagar estilo já escrito sem querer.
+- Nunca remove uma classe que pertence ao eixo estrutural `variant` (ex: `card--compact`) mesmo que o nome coincida por convenção BEM — só mexe em regra que é de verdade um valor do `data-prop-modifier` (mesma exclusão que `readModifierAxes` já faz pro preview).
+- Idempotente: valor que não existe (ou "remover todos" quando não sobrou nenhum) só avisa e não faz nada.
+- Mesma regra de commit dos outros scripts: `chore: remove modificador de estilo <valor> de positivus-<nome>` (ou `chore: remove todos os modificadores de estilo de <prop> em positivus-<nome>` pro "remover todos"), sem escopo.
 
 ## Storybook
 
