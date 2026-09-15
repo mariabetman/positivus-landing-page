@@ -1,6 +1,7 @@
 import { BaseComponent } from '../../base-component.js';
 import template from './positivus-cta-banner.html?raw';
 import styles from './positivus-cta-banner.css?inline';
+import '../../atoms/positivus-button/positivus-button.js';
 
 export class PositivusCtaBanner extends BaseComponent {
   static observedAttributes = BaseComponent.extractPropNames(template);
