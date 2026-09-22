@@ -1,0 +1,96 @@
+:host {
+    width: 100%;
+}
+.button {
+    font-family: 'Space Grotesk', sans-serif;
+    align-items: center;
+    justify-content: center;
+    border: 0.063rem solid;
+    border-radius: 0.875rem;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    display: flex;
+    padding: 1.25rem 2.1875rem;
+    cursor: pointer;
+    display: flex;
+    padding: 1.25rem 2.1875rem;
+    text-decoration: none;
+    transition:
+        background-color 0.3s ease,
+        color 0.3s ease,
+        transform 0.3s ease,
+        box-shadow 0.3s ease;
+}
+
+.button:disabled {
+    cursor: not-allowed;
+}
+
+.button--primary:disabled {
+    background-color: var(--green-light);
+    border-color: var(--green-light);
+}
+
+.button--secondary:disabled {
+    background-color: var(--dark-grey);
+    border-color: var(--dark-grey);
+}
+
+.button--tertiary:disabled {
+    background-color: var(--grey-light);
+    border-color: var(--grey-light);
+}
+
+
+.button:hover:enabled {
+    transform: translateY(-0.125rem);
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.button--primary:hover:enabled {
+    background-color: var(--black);
+    color: var(--green)
+}
+
+.button--secondary:hover:enabled {
+    background-color: var(--white);
+    color: var(--black);
+
+}
+
+.button--tertiary:enabled{
+    background-color: var(--green);
+}
+    
+
+.button--primary {
+    background-color: var(--green);
+    color: var(--black);
+    border-color: var(--green);
+}
+
+.button--secondary {
+    background-color: var(--black);
+    color: var(--grey);
+    border-color: var(--black);
+}
+
+.button--tertiary {
+    background-color: transparent;
+    color: var(--black);
+    border-color: var(--black);
+}
+
+@media(min-width:48rem) {
+    .button {
+        display: none;
+    }
+}
+
+@media(min-width:64rem) {
+    .button {
+        display: block;
+        width: fit-content;
+    }
+}

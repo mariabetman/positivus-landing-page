@@ -12,20 +12,6 @@
     align-items: start;
     gap: 1.25rem;
 }
-
-.cta-banner__button {
-    padding: 1.25rem 2.188rem;
-    background-color: var(--black);
-    color: var(--grey);
-    border-radius: 0.875rem;
-    font-weight: normal;
-    font-size: 1.25rem;
-    line-height: 1.75rem;
-    box-sizing: border-box;
-    width: 100%;
-    text-align: center;
-}
-
 .cta-banner__illustration {
     display: none;
 }
@@ -51,10 +37,6 @@
     .cta-banner__content {
         max-width: 31.25rem;
         gap: 1.625rem;
-    }
-    
-    .cta-banner__button {
-        width: auto; 
     }
 
     .cta-banner__illustration {

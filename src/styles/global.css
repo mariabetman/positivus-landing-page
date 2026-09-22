@@ -3,6 +3,9 @@
   --green: #B9FF66;
   --black: #191A23;
   --grey: #F3F3F3;
+  --grey-light: #E8E8E8;
+  --green-light: #dcfab1;
+  --dark-grey:#7c797a;
   
   /* desktop width */
   --desktop-max-width: 77.5rem;
