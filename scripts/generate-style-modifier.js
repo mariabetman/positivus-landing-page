@@ -2,16 +2,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
-import { findComponents, findModifierBaseClass } from './lib/component-files.js';
+import {
+  findComponents,
+  readComponentHtmlSources,
+  findModifierBaseClassAcrossSources,
+  escapeRegExp,
+} from './lib/component-files.js';
 
 const PROJECT_ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   '..',
 );
-
-function escapeRegExp(string) {
-  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /**
  * Cria a regra CSS (vazia, pronta pra preencher) de um novo valor de
@@ -35,14 +36,16 @@ function generateStyleModifier(name, prop, value) {
     component.level,
     component.name,
   );
-  const htmlPath = path.join(componentDir, `${name}.html`);
   const cssPath = path.join(componentDir, `${name}.css`);
 
-  const html = fs.readFileSync(htmlPath, 'utf-8');
-  const baseClass = findModifierBaseClass(html, prop);
+  // Procura tanto no .html padrão quanto em cada bloco de
+  // variants/variant/<valor>.html — o data-prop-modifier pode estar
+  // marcado só dentro de uma variante estrutural, não no padrão.
+  const sources = readComponentHtmlSources(componentDir, name);
+  const baseClass = findModifierBaseClassAcrossSources(sources, prop);
   if (!baseClass) {
     throw new Error(
-      `nenhum elemento com data-prop-modifier="${prop}" (e uma classe) encontrado em ${name}.html`,
+      `nenhum elemento com data-prop-modifier="${prop}" (e uma classe) encontrado em ${name}.html nem em variants/variant/`,
     );
   }
 
