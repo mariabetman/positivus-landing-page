@@ -1,0 +1,27 @@
+.primary-color--black{
+    color: var(--black);
+}
+
+.primary-color--grey{
+    color: var(--grey);
+}
+
+.primary-color--green{
+    color: var(--green);
+}
+
+.primary-color--green-light{
+    color: var(--green-light);
+}
+
+.primary-color--grey-light{
+    color: var(--grey-light);
+}
+
+.primary-color--dark-grey{
+    color: var(--dark-grey);
+}
+
+.primary-color--white{
+    color: var(--white);
+}
