@@ -43,24 +43,19 @@
 }
 
 
-.button:hover:enabled {
+.button:hover:not(:disabled) {
     transform: translateY(-0.125rem);
     box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
 }
 
-.button--primary:hover:enabled {
+.button--primary:hover:not(:disabled) {
     background-color: var(--black);
-    color: var(--green)
+    color: var(--green);
 }
 
-.button--secondary:hover:enabled {
-    background-color: var(--white);
-    color: var(--black);
-
-}
-
-.button--tertiary:enabled{
+.button--secondary:hover:not(:disabled) {
     background-color: var(--green);
+    color: var(--black);
 }
     
 
