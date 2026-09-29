@@ -1,6 +1,7 @@
 import reset from '../styles/reset.css?inline';
 import typograph from '../styles/typograph.css?inline';
 import global from '../styles/global.css?inline';
+import colors from '../styles/colors.css?inline';
 
 const resetStylesheet = new CSSStyleSheet();
 resetStylesheet.replaceSync(reset);
@@ -10,6 +11,9 @@ typographStylesheet.replaceSync(typograph);
 
 const globalStylesheet = new CSSStyleSheet();
 globalStylesheet.replaceSync(global);
+
+const colorsStylesheet = new CSSStyleSheet();
+colorsStylesheet.replaceSync(colors);
 
 const PROP_ATTRIBUTE_PATTERN = /data-prop(?:-[a-z-]+)?\s*=\s*["']([^"']+)["']/g;
 const PROP_DATA_ATTRIBUTE_PATTERN = /^data-prop(?:-toggle-(.+)|-(.+))?$/;
@@ -30,6 +34,7 @@ export class BaseComponent extends HTMLElement {
       resetStylesheet,
       typographStylesheet,
       globalStylesheet,
+      colorsStylesheet,
     ];
 
     if (styles) {

@@ -205,9 +205,9 @@ function renderComponentPreview(projectRoot, base, level, name) {
   const ownCss = fs.existsSync(cssFile) ? fs.readFileSync(cssFile, 'utf-8') : '';
 
   // Mesma ordem que o BaseComponent real adota no Shadow DOM (ver
-  // src/components/base-component.js): reset, tipografia, global e só então
-  // o CSS do próprio componente.
-  const css = `${readResetCss(projectRoot)}\n${readStyle(projectRoot, 'typograph.css')}\n${readStyle(projectRoot, 'global.css')}\n${ownCss}`;
+  // src/components/base-component.js): reset, tipografia, global, cores e só
+  // então o CSS do próprio componente.
+  const css = `${readResetCss(projectRoot)}\n${readStyle(projectRoot, 'typograph.css')}\n${readStyle(projectRoot, 'global.css')}\n${readStyle(projectRoot, 'colors.css')}\n${ownCss}`;
 
   const nestedComponentScripts = buildNestedComponentScripts(
     rawMarkup,
