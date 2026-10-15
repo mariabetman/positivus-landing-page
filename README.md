@@ -68,6 +68,8 @@ npm run test              # testes unitários (Vitest)
 npm run e2e               # testes e2e (Cypress), sobe o dev server sozinho
 npm run generate:component            # gera .js/.stories.js/.test.js de componentes novos
 npm run generate:composition-imports  # gera o import de componentes usados dentro de outro (ou na index.html)
+npm run generate:style-modifier -- <positivus-nome> <prop> <valor>          # cria a regra CSS de um valor novo de data-prop-modifier
+npm run remove:style-modifier -- <positivus-nome> <prop> [valor] [--force]  # remove um (ou todos) os valores de data-prop-modifier
 ```
 
 ## Estrutura
@@ -211,6 +213,25 @@ Uma variação só de estilo usa `data-prop-modifier="nome"` por padrão — som
 ```
 
 Variantes estruturais (`variant`) ficam em `variants/variant/<valor>.html`, cada uma no seu próprio arquivo (fácil de achar/editar), e `npm run generate:component` já gera uma story por valor não-padrão sozinho — inclusive pra um componente que já existia antes de ganhar `variants/`: rode o comando de novo depois de adicionar um arquivo novo lá, e ele acrescenta só a story que falta no `.stories.js` que já existe (ver o formato em `Compact`, no [`positivus-example-card.stories.js`](./src/components/molecules/positivus-example-card/positivus-example-card.stories.js)). `npm run dev` também mostra todas as combinações automaticamente no preview do componente.
+
+### Criando/removendo um valor de `data-prop-modifier`
+
+Pra criar o "gancho" CSS de um valor novo, sem escrever o seletor na mão:
+
+```bash
+npm run generate:style-modifier -- positivus-example-card appearance dark
+```
+
+Isso acrescenta `.card--dark { }` (vazia) no fim do `.css` do componente, achando a classe-base sozinho (funciona mesmo se o `data-prop-modifier` só existir dentro de um bloco de `variants/variant/`, não no `.html` padrão). Depois é só preencher o CSS de verdade — o preview de dev já mostra essa combinação sozinho, sem precisar de mais nada.
+
+Pra remover, o comando inverso:
+
+```bash
+npm run remove:style-modifier -- positivus-example-card appearance dark   # remove só esse valor
+npm run remove:style-modifier -- positivus-example-card appearance       # remove todos os valores de appearance
+```
+
+Por segurança, ele recusa remover uma regra que já tenha CSS de verdade escrito dentro (não só `{ }` vazia) — nesse caso, é preciso confirmar com `--force`.
 
 ## Passo a passo: adicionando uma imagem a um componente
 

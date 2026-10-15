@@ -139,19 +139,58 @@ export function readVariantAxes(componentDir) {
     });
 }
 
-function escapeRegExp(string) {
+export function escapeRegExp(string) {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
- * Acha, no `.html` de um componente, o elemento marcado com
+ * Valores do eixo estrutural `variant` (`readVariantAxes`) de um
+ * componente — usado tanto por `readModifierAxes` quanto por
+ * `remove-style-modifier.js` pra excluir valor que pertence à variante
+ * estrutural (ex: `card--compact`), não a um `data-prop-modifier` de
+ * verdade (ver `readModifierAxes` pra explicação completa).
+ */
+export function structuralVariantValues(componentDir) {
+  return new Set(
+    readVariantAxes(componentDir).find((axis) => axis.name === 'variant')
+      ?.values ?? [],
+  );
+}
+
+/**
+ * Devolve o `.html` padrão do componente **e** o conteúdo de cada bloco
+ * estrutural (`variants/variant/<valor>.html`) — um `data-prop-modifier`
+ * pode estar marcado só dentro de um bloco de variante (não no `.html`
+ * padrão), já que cada bloco é um fragmento HTML independente. Mesma ideia
+ * de `sources` em `BaseComponent.extractPropNames` (`[template,
+ * ...Object.values(structuralVariants)]`), só que lendo do disco em vez de
+ * `variantFiles` — usado por `findModifierBaseClass`/`readModifierAxes` e
+ * por `generate-style-modifier.js`, pra não ficar cego a modificador que só
+ * existe numa variante.
+ */
+export function readComponentHtmlSources(componentDir, name) {
+  const sources = [];
+
+  const htmlFile = path.join(componentDir, `${name}.html`);
+  if (fs.existsSync(htmlFile)) sources.push(fs.readFileSync(htmlFile, 'utf-8'));
+
+  const variantDir = path.join(componentDir, 'variants', 'variant');
+  if (fs.existsSync(variantDir)) {
+    for (const file of fs.readdirSync(variantDir).filter((f) => f.endsWith('.html')).sort()) {
+      sources.push(fs.readFileSync(path.join(variantDir, file), 'utf-8'));
+    }
+  }
+
+  return sources;
+}
+
+/**
+ * Acha, num `.html` (ou bloco de variante), o elemento marcado com
  * `data-prop-modifier="<propName>"` e devolve a classe-base dele (a
  * primeira classe já escrita nele) — mesma regra que `BaseComponent#bindProps`
- * usa em runtime (`element.classList[0]`), só que lendo o texto do `.html`
- * direto (Node), sem precisar montar nenhum DOM de verdade. Usado tanto por
- * `readModifierAxes` (preview de dev) quanto por `generate-style-modifier.js`
- * (pra saber onde escrever a regra CSS nova). Devolve `null` se não achar o
- * elemento ou se ele não tiver nenhuma classe.
+ * usa em runtime (`element.classList[0]`), só que lendo o texto direto
+ * (Node), sem precisar montar nenhum DOM de verdade. Devolve `null` se não
+ * achar o elemento ou se ele não tiver nenhuma classe.
  */
 export function findModifierBaseClass(html, propName) {
   const tagPattern = new RegExp(
@@ -167,9 +206,28 @@ export function findModifierBaseClass(html, propName) {
 }
 
 /**
+ * Mesma ideia de `findModifierBaseClass`, mas tentando em cada fonte de
+ * `readComponentHtmlSources` até achar a primeira que tiver o
+ * `data-prop-modifier="<propName>"` marcado — cobre o caso de o prop só
+ * existir dentro de um bloco de variante, não no `.html` padrão. Usado por
+ * `readModifierAxes` (preview de dev) e por `generate-style-modifier.js`
+ * (pra saber onde escrever a regra CSS nova).
+ */
+export function findModifierBaseClassAcrossSources(sources, propName) {
+  for (const source of sources) {
+    const baseClass = findModifierBaseClass(source, propName);
+    if (baseClass) return baseClass;
+  }
+
+  return null;
+}
+
+/**
  * Lê os eixos de `data-prop-modifier` de um componente que **já têm CSS
- * escrito** — pra cada `data-prop-modifier="<prop>"` achado no `.html`, acha
- * a classe-base (`findModifierBaseClass`) e procura no `.css` regras
+ * escrito** — pra cada `data-prop-modifier="<prop>"` achado no `.html`
+ * padrão **ou** em qualquer bloco de `variants/variant/<valor>.html`
+ * (`readComponentHtmlSources`), acha a classe-base
+ * (`findModifierBaseClassAcrossSources`) e procura no `.css` regras
  * exatamente `.<classe-base>--<valor>` (ignora seletor composto, tipo
  * `.card--compact .card__title`, que não é o modificador em si). Espelha
  * `readVariantAxes` (mesmo formato de retorno, mesma leitura direta de
@@ -188,27 +246,25 @@ export function findModifierBaseClass(html, propName) {
  * `appearance=compact`), o que seria enganoso.
  */
 export function readModifierAxes(componentDir, name) {
-  const htmlFile = path.join(componentDir, `${name}.html`);
   const cssFile = path.join(componentDir, `${name}.css`);
-  if (!fs.existsSync(htmlFile) || !fs.existsSync(cssFile)) return [];
+  const sources = readComponentHtmlSources(componentDir, name);
+  if (sources.length === 0 || !fs.existsSync(cssFile)) return [];
 
-  const html = fs.readFileSync(htmlFile, 'utf-8');
   const css = fs.readFileSync(cssFile, 'utf-8');
 
-  const structuralVariantValues = new Set(
-    readVariantAxes(componentDir).find((axis) => axis.name === 'variant')
-      ?.values ?? [],
-  );
+  const excludedValues = structuralVariantValues(componentDir);
 
   const propNames = new Set(
-    [...html.matchAll(/data-prop-modifier=["']([^"']+)["']/g)].map(
-      (match) => match[1],
+    sources.flatMap((source) =>
+      [...source.matchAll(/data-prop-modifier=["']([^"']+)["']/g)].map(
+        (match) => match[1],
+      ),
     ),
   );
 
   const axes = [];
   for (const propName of propNames) {
-    const baseClass = findModifierBaseClass(html, propName);
+    const baseClass = findModifierBaseClassAcrossSources(sources, propName);
     if (!baseClass) continue;
 
     const rulePattern = new RegExp(
@@ -219,7 +275,7 @@ export function readModifierAxes(componentDir, name) {
       ...new Set(
         [...css.matchAll(rulePattern)]
           .map((match) => match[1])
-          .filter((value) => !structuralVariantValues.has(value)),
+          .filter((value) => !excludedValues.has(value)),
       ),
     ].sort();
     if (values.length === 0) continue;
